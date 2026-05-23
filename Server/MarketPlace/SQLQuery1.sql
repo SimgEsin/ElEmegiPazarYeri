@@ -1,0 +1,1 @@
+﻿SELECT Id, Name, Stock, Price FROM Products
