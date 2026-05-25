@@ -29,6 +29,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
         var categories = await _mediator.Send(new GetAllCategoriesQuery(), cancellationToken);
@@ -36,6 +37,7 @@ public sealed class CategoriesController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var category = await _mediator.Send(new GetCategoryByIdQuery(id), cancellationToken);

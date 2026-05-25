@@ -1,9 +1,11 @@
 "use client"
 
 import Image from "next/image"
-import { startTransition, useState } from "react"
+import { startTransition, useEffect, useRef, useState, type ChangeEvent } from "react"
+import { AxiosError } from "axios"
 import {
   BellDot,
+  Camera,
   CheckCircle2,
   ChevronRight,
   LogOut,
@@ -24,9 +26,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { useAuth, type AuthUser } from "@/components/providers/auth-provider"
 import AgreementsSection from "./agreements-section"
 import MessagesSection from "./messages-section"
 import NotificationsSection from "./notifications-section"
+import apiClient from "@/lib/axios"
 import { setIsLoggedIn } from "@/lib/auth-storage"
 import {
   accountAddresses,
@@ -58,6 +62,46 @@ type ProfileSection =
 type EditableProfileField = "name" | "email" | "phone" | "birthDate"
 type NewAddressDraft = Omit<AccountAddress, "id">
 
+type ArtisanProfileResponse = {
+  id?: string
+  displayName?: string
+  craft?: string
+  data?: ArtisanProfileResponse
+}
+
+type UpdateUserProfilePayload = {
+  fullName: string | null
+  phoneNumber: string | null
+  dateOfBirth: string | null
+  avatarUrl: string | null
+}
+
+type CurrentUserProfileResponse = {
+  fullName?: string | null
+  FullName?: string | null
+  name?: string | null
+  Name?: string | null
+  firstName?: string | null
+  FirstName?: string | null
+  lastName?: string | null
+  LastName?: string | null
+  email?: string | null
+  Email?: string | null
+  phoneNumber?: string | null
+  PhoneNumber?: string | null
+  phone?: string | null
+  Phone?: string | null
+  dateOfBirth?: string | null
+  DateOfBirth?: string | null
+  birthDate?: string | null
+  BirthDate?: string | null
+  avatarUrl?: string | null
+  AvatarUrl?: string | null
+  avatarSrc?: string | null
+  AvatarSrc?: string | null
+  data?: CurrentUserProfileResponse
+}
+
 const sidebarItems: { id: ProfileSection; label: string; icon: typeof User }[] = [
   { id: "info", label: "Kullanıcı Bilgileri", icon: User },
   { id: "orders", label: "Siparişlerim", icon: Package },
@@ -80,6 +124,10 @@ function createAddressDraft(isDefault = false): NewAddressDraft {
 }
 
 function formatDateTR(dateString: string): string {
+  if (!dateString) {
+    return "Belirtilmedi"
+  }
+
   return new Date(dateString).toLocaleDateString("tr-TR", {
     day: "numeric",
     month: "long",
@@ -119,6 +167,101 @@ function getTimeLabel() {
   return new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
 }
 
+function getStringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function getAuthUserDisplayName(user: AuthUser | null) {
+  if (!user) {
+    return null
+  }
+
+  const fullName = getStringValue(user.fullName) ?? getStringValue(user.name)
+  const firstName = getStringValue(user.firstName)
+  const lastName = getStringValue(user.lastName)
+
+  return fullName ?? (`${firstName ?? ""} ${lastName ?? ""}`.trim() || null)
+}
+
+function getAuthUserEmail(user: AuthUser | null) {
+  return getStringValue(user?.email)
+}
+
+function getAuthUserPhone(user: AuthUser | null) {
+  return getStringValue(user?.phoneNumber) ?? getStringValue(user?.phone)
+}
+
+function getAuthUserDateOfBirth(user: AuthUser | null) {
+  const dateOfBirth = getStringValue(user?.dateOfBirth) ?? getStringValue(user?.birthDate)
+
+  return dateOfBirth?.slice(0, 10) ?? null
+}
+
+function getAuthUserAvatarUrl(user: AuthUser | null) {
+  return getStringValue(user?.avatarUrl) ?? getStringValue(user?.avatarSrc)
+}
+
+function createProfileFromAuthUser(user: AuthUser | null, fallback: UserProfile) {
+  return {
+    ...fallback,
+    name: getAuthUserDisplayName(user) ?? "",
+    email: getAuthUserEmail(user) ?? "",
+    phone: getAuthUserPhone(user) ?? "",
+    birthDate: getAuthUserDateOfBirth(user) ?? "",
+    avatarSrc: getAuthUserAvatarUrl(user) ?? fallback.avatarSrc,
+  }
+}
+
+function createProfileFromCurrentUser(payload: CurrentUserProfileResponse, fallback: UserProfile) {
+  const currentUser = payload.data ?? payload
+  const firstName = getStringValue(currentUser.firstName) ?? getStringValue(currentUser.FirstName)
+  const lastName = getStringValue(currentUser.lastName) ?? getStringValue(currentUser.LastName)
+  const fullName =
+    getStringValue(currentUser.fullName) ??
+    getStringValue(currentUser.FullName) ??
+    getStringValue(currentUser.name) ??
+    getStringValue(currentUser.Name) ??
+    (`${firstName ?? ""} ${lastName ?? ""}`.trim() || null)
+  const dateOfBirth =
+    getStringValue(currentUser.dateOfBirth) ??
+    getStringValue(currentUser.DateOfBirth) ??
+    getStringValue(currentUser.birthDate) ??
+    getStringValue(currentUser.BirthDate)
+
+  return {
+    ...fallback,
+    name: fullName ?? "",
+    email: getStringValue(currentUser.email) ?? getStringValue(currentUser.Email) ?? "",
+    phone:
+      getStringValue(currentUser.phoneNumber) ??
+      getStringValue(currentUser.PhoneNumber) ??
+      getStringValue(currentUser.phone) ??
+      getStringValue(currentUser.Phone) ??
+      "",
+    birthDate: dateOfBirth?.slice(0, 10) ?? "",
+    avatarSrc:
+      getStringValue(currentUser.avatarUrl) ??
+      getStringValue(currentUser.AvatarUrl) ??
+      getStringValue(currentUser.avatarSrc) ??
+      getStringValue(currentUser.AvatarSrc) ??
+      fallback.avatarSrc,
+  }
+}
+
+function getNullableProfileValue(value: string) {
+  const trimmedValue = value.trim()
+
+  return trimmedValue ? trimmedValue : null
+}
+
+function unwrapArtisanProfile(payload: ArtisanProfileResponse) {
+  return payload.data ?? payload
+}
+
+function isNotFound(error: unknown) {
+  return error instanceof AxiosError && error.response?.status === 404
+}
+
 function UserInfoSection({
   profile,
   draftProfile,
@@ -129,6 +272,9 @@ function UserInfoSection({
   onDraftChange,
   onSave,
   onCancel,
+  isSaving,
+  feedbackMessage,
+  errorMessage,
 }: {
   profile: UserProfile
   draftProfile: UserProfile
@@ -139,6 +285,9 @@ function UserInfoSection({
   onDraftChange: (field: EditableProfileField, value: string) => void
   onSave: () => void
   onCancel: () => void
+  isSaving: boolean
+  feedbackMessage: string
+  errorMessage: string
 }) {
   return (
     <div className="space-y-6">
@@ -223,7 +372,8 @@ function UserInfoSection({
 
       {isEditing ? (
         <Card className="border-primary/10">
-          <CardContent className="space-y-4 p-4">
+          <CardContent className="p-4">
+            <div className="space-y-4">
             <h3 className="text-sm font-bold">Kullanıcı Bilgilerini Düzenle</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
@@ -248,16 +398,28 @@ function UserInfoSection({
                 onChange={(event) => onDraftChange("birthDate", event.target.value)}
               />
             </div>
+              {errorMessage ? (
+                <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  {errorMessage}
+                </div>
+              ) : null}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" className="text-xs font-bold" onClick={onCancel}>
+              <Button type="button" variant="outline" className="text-xs font-bold" onClick={onCancel}>
                 İptal
               </Button>
-              <Button className="text-xs font-bold" onClick={onSave}>
-                Kaydet
+              <Button type="button" className="text-xs font-bold" onClick={onSave} disabled={isSaving}>
+                {isSaving ? "Kaydediliyor..." : "Kaydet"}
               </Button>
+            </div>
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {feedbackMessage ? (
+        <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-primary">
+          {feedbackMessage}
+        </div>
       ) : null}
 
       <div className="flex justify-end">
@@ -648,11 +810,18 @@ function LogoutSection({ onLogout }: { onLogout: () => void }) {
 }
 
 export default function ProfileClient() {
+  const { user, logout } = useAuth()
+  console.log("Giriş Yapan Kullanıcı Verisi:", user)
+  const avatarFileInputRef = useRef<HTMLInputElement>(null)
   const [activeSection, setActiveSection] = useState<ProfileSection>("info")
   const orders = useCustomerOrdersSnapshot()
   const [profile, setProfile] = useState<UserProfile>(userProfile)
   const [draftProfile, setDraftProfile] = useState<UserProfile>(userProfile)
+  const [, setHasShop] = useState(false)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [profileFeedback, setProfileFeedback] = useState("")
+  const [profileError, setProfileError] = useState("")
   const [addresses, setAddresses] = useState<AccountAddress[]>(accountAddresses)
   const [followedList, setFollowedList] = useState<FollowedArtisan[]>(initialFollowedArtisans)
   const [messageThreads, setMessageThreads] = useState<MessageThread[]>(() => sortThreads(customerMessageThreads))
@@ -670,9 +839,94 @@ export default function ProfileClient() {
     newAddressDraft.postalCode.trim() !== "" &&
     newAddressDraft.fullAddress.trim() !== ""
 
+  const profileWithAuthData: UserProfile = user
+    ? profile
+    : {
+        ...profile,
+        name: "Yukleniyor...",
+        email: "Yukleniyor...",
+      }
+
+  useEffect(() => {
+    if (!user) {
+      return
+    }
+
+    setProfile((currentProfile) => createProfileFromAuthUser(user, currentProfile))
+    setDraftProfile((currentDraft) => createProfileFromAuthUser(user, currentDraft))
+  }, [user])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCurrentUserProfile() {
+      try {
+        const response = await apiClient.get<CurrentUserProfileResponse>("/Users/me")
+
+        if (!isMounted) {
+          return
+        }
+
+        setProfile((currentProfile) => createProfileFromCurrentUser(response.data, currentProfile))
+        setDraftProfile((currentDraft) => createProfileFromCurrentUser(response.data, currentDraft))
+      } catch {
+        // Token claims and mock fallback stay visible if the profile request fails.
+      }
+    }
+
+    loadCurrentUserProfile()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadArtisanProfile() {
+      try {
+        const response = await apiClient.get<ArtisanProfileResponse>("/artisanprofiles/me", {
+          validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+        })
+
+        if (!isMounted) {
+          return
+        }
+
+        if (response.status === 404) {
+          setHasShop(false)
+          return
+        }
+
+        const artisanProfile = unwrapArtisanProfile(response.data)
+        setHasShop(Boolean(artisanProfile.id ?? artisanProfile.displayName ?? artisanProfile.craft))
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        if (isNotFound(error)) {
+          setHasShop(false)
+          return
+        }
+
+        setHasShop(false)
+      }
+    }
+
+    loadArtisanProfile()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   function handleStartEditingProfile() {
-    setDraftProfile(profile)
+    setDraftProfile(profileWithAuthData)
     setIsEditingProfile(true)
+    setProfileFeedback("")
+    setProfileError("")
   }
 
   function handleProfileDraftChange(field: EditableProfileField, value: string) {
@@ -682,14 +936,74 @@ export default function ProfileClient() {
     }))
   }
 
-  function handleSaveProfile() {
-    setProfile(draftProfile)
-    setIsEditingProfile(false)
+  async function handleSave() {
+    setIsSavingProfile(true)
+    setProfileFeedback("")
+    setProfileError("")
+
+    const payload: UpdateUserProfilePayload = {
+      fullName: getNullableProfileValue(draftProfile.name),
+      phoneNumber: getNullableProfileValue(draftProfile.phone),
+      dateOfBirth: getNullableProfileValue(draftProfile.birthDate),
+      avatarUrl: getNullableProfileValue(draftProfile.avatarSrc),
+    }
+
+    try {
+      await apiClient.put("/Users/me", payload)
+
+      const nextProfile = {
+        ...draftProfile,
+        name: payload.fullName ?? "",
+        phone: payload.phoneNumber ?? "",
+        birthDate: payload.dateOfBirth ?? "",
+        avatarSrc: payload.avatarUrl ?? draftProfile.avatarSrc,
+      }
+
+      setProfile(nextProfile)
+      setIsEditingProfile(false)
+      setProfileFeedback("Bilgileriniz baÅŸarÄ±yla gÃ¼ncellendi.")
+      setProfileFeedback("Profil bilgileri kaydedildi.")
+    } catch {
+      setProfileError("Bilgiler kaydedilemedi. LÃ¼tfen tekrar deneyin.")
+      setProfileError("Kayit sirasinda bir hata olustu.")
+    } finally {
+      setIsSavingProfile(false)
+    }
   }
 
   function handleCancelProfileEdit() {
-    setDraftProfile(profile)
+    setDraftProfile(profileWithAuthData)
     setIsEditingProfile(false)
+    setProfileError("")
+  }
+
+  function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        return
+      }
+
+      const avatarUrl = reader.result
+
+      setProfile((currentProfile) => ({
+        ...currentProfile,
+        avatarSrc: avatarUrl,
+      }))
+      setDraftProfile((currentDraft) => ({
+        ...currentDraft,
+        avatarSrc: avatarUrl,
+      }))
+    }
+
+    reader.readAsDataURL(file)
   }
 
   function handleStartAddingAddress() {
@@ -846,6 +1160,7 @@ export default function ProfileClient() {
   }
 
   function handleLogout() {
+    logout()
     setIsLoggedIn(false)
   }
 
@@ -878,6 +1193,13 @@ export default function ProfileClient() {
       <aside className="shrink-0 lg:w-64">
         <Card className="sticky top-24 border-primary/10">
           <CardContent className="p-3">
+            <input
+              ref={avatarFileInputRef}
+              type="file"
+              accept="image/jpeg, image/png, image/webp"
+              className="hidden"
+              onChange={handleImageChange}
+            />
             <div className="flex items-center gap-3 px-3 py-3">
               <div className="relative size-10 overflow-hidden rounded-full border border-primary/20">
                 <Image
@@ -889,9 +1211,21 @@ export default function ProfileClient() {
                 />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold">{profile.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{profile.email}</p>
+                <p className="truncate text-sm font-bold">{profileWithAuthData.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{profileWithAuthData.email}</p>
               </div>
+            </div>
+            <div className="px-3 pb-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full text-xs font-bold"
+                onClick={() => avatarFileInputRef.current?.click()}
+              >
+                <Camera className="mr-1.5 size-3.5" />
+                Fotoğrafı Değiştir
+              </Button>
             </div>
 
             <Separator className="my-1" />
@@ -934,15 +1268,18 @@ export default function ProfileClient() {
           <CardContent className="p-5 sm:p-6 lg:p-8">
             {activeSection === "info" ? (
               <UserInfoSection
-                profile={profile}
+                profile={profileWithAuthData}
                 draftProfile={draftProfile}
                 isEditing={isEditingProfile}
                 orderCount={orders.length}
                 addressCount={addresses.length}
                 onStartEditing={handleStartEditingProfile}
                 onDraftChange={handleProfileDraftChange}
-                onSave={handleSaveProfile}
+                onSave={handleSave}
                 onCancel={handleCancelProfileEdit}
+                isSaving={isSavingProfile}
+                feedbackMessage={profileFeedback}
+                errorMessage={profileError}
               />
             ) : null}
             {activeSection === "orders" ? <OrdersSection orders={orders} /> : null}

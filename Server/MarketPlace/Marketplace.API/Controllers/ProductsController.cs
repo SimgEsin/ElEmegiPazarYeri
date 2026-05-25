@@ -29,6 +29,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
         var products = await _mediator.Send(new GetAllProductsQuery(), cancellationToken);
@@ -36,6 +37,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var product = await _mediator.Send(new GetProductByIdQuery(id), cancellationToken);

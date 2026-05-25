@@ -8,11 +8,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
+using System.Text.Json.Serialization;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 // MediatR'ı DI (Dependency Injection) konteynerine kaydediyoruz.
 // Application katmanındaki Command ve Handler'ları bulabilmesi için o katmandan bir sınıfı referans gösteriyoruz.
 builder.Services.AddMediatR(cfg =>
@@ -29,7 +34,7 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(
                 "http://localhost:3000",
-                "https://localhost:3000",
+                "https://localhost:3000", "http://192.168.180.1:3000",
                 "http://localhost:5173",
                 "https://localhost:5173")
             .AllowAnyHeader()
@@ -127,6 +132,12 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<MarketplaceDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -139,4 +150,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+
 app.Run();

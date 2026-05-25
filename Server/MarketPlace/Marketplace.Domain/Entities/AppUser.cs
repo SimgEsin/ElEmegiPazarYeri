@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Marketplace.Domain.Entities;
 
 public class AppUser : BaseEntity
@@ -6,7 +8,19 @@ public class AppUser : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
+    [NotMapped]
+    public string? PhoneNumber
+    {
+        get => Phone;
+        set => Phone = value ?? string.Empty;
+    }
     public DateTime? BirthDate { get; set; }
+    [NotMapped]
+    public DateTime? DateOfBirth
+    {
+        get => BirthDate;
+        set => BirthDate = value;
+    }
     public string? AvatarUrl { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime? LastLoginAt { get; set; }

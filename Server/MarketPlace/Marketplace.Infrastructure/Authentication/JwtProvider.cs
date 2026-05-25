@@ -34,7 +34,9 @@ public class JwtProvider : IJwtProvider
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email)
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Name, user.FullName ?? string.Empty),
+            new Claim(ClaimTypes.MobilePhone, user.Phone ?? "")
         };
 
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
