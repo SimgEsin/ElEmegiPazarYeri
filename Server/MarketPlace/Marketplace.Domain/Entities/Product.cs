@@ -14,6 +14,9 @@ public class Product : BaseEntity
     public string? Material { get; set; }
     public string? Technique { get; set; }
     public string? ProductionDurationText { get; set; }
+    public string? HandcraftDurationText { get; set; }
+    public string? Quote { get; set; }
+    public string? ProductionStepsText { get; set; }
     public string? DeliveryInfoText { get; set; }
     public decimal Price { get; set; }
     public int Stock { get; set; }

@@ -94,6 +94,31 @@ public sealed class CheckoutCartCommandHandler : IRequestHandler<CheckoutCartCom
             cartItem.UpdatedAt = DateTime.UtcNow;
         }
 
+        var buyerNotification = new Notification
+        {
+            UserId = userId,
+            Type = NotificationType.Order,
+            Title = "Siparişiniz alındı",
+            Description = $"{order.OrderNo} numaralı siparişiniz oluşturuldu.",
+            TargetModule = "orders",
+            TargetId = order.Id
+        };
+        await _dbContext.Notifications.AddAsync(buyerNotification, cancellationToken);
+
+        if (firstArtisanId != userId)
+        {
+            var artisanNotification = new Notification
+            {
+                UserId = firstArtisanId,
+                Type = NotificationType.Order,
+                Title = "Yeni siparişiniz var",
+                Description = $"{order.OrderNo} numaralı yeni bir sipariş aldınız.",
+                TargetModule = "orders",
+                TargetId = order.Id
+            };
+            await _dbContext.Notifications.AddAsync(artisanNotification, cancellationToken);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return order.Id;

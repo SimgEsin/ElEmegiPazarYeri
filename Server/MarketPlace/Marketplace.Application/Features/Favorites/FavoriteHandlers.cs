@@ -112,23 +112,48 @@ public sealed class DeleteFavoriteCommandHandler : IRequestHandler<DeleteFavorit
 public sealed class GetAllFavoritesQueryHandler : IRequestHandler<GetAllFavoritesQuery, IReadOnlyList<FavoriteDto>>
 {
     private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetAllFavoritesQueryHandler(IMarketplaceDbContext dbContext)
+    public GetAllFavoritesQueryHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
     {
         _dbContext = dbContext;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyList<FavoriteDto>> Handle(GetAllFavoritesQuery request, CancellationToken cancellationToken)
     {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            return Array.Empty<FavoriteDto>();
+        }
+
         return await _dbContext.Favorites
             .AsNoTracking()
-            .Where(favorite => !favorite.IsDeleted)
+            .Where(favorite => !favorite.IsDeleted && favorite.UserId == userId)
             .OrderByDescending(favorite => favorite.CreatedAt)
             .Select(favorite => new FavoriteDto
             {
                 Id = favorite.Id,
                 UserId = favorite.UserId,
                 ProductId = favorite.ProductId,
+                ProductName = favorite.Product != null ? favorite.Product.Name : null,
+                ProductSlug = favorite.Product != null ? favorite.Product.Slug : null,
+                ProductPrice = favorite.Product != null ? favorite.Product.Price : 0,
+                CategoryName = favorite.Product != null && favorite.Product.Category != null
+                    ? favorite.Product.Category.Name
+                    : null,
+                IsSoldOut = favorite.Product != null && favorite.Product.IsSoldOut,
+                ProductImageUrl = favorite.Product != null
+                    ? favorite.Product.ProductImages
+                        .Where(image => !image.IsDeleted)
+                        .OrderBy(image => image.SortOrder)
+                        .Select(image => image.Url)
+                        .FirstOrDefault()
+                    : null,
+                ArtisanDisplayName = _dbContext.ArtisanProfiles
+                    .Where(profile => favorite.Product != null && profile.UserId == favorite.Product.ArtisanId && !profile.IsDeleted)
+                    .Select(profile => profile.DisplayName)
+                    .FirstOrDefault(),
                 CreatedAt = favorite.CreatedAt,
                 UpdatedAt = favorite.UpdatedAt
             })

@@ -268,6 +268,49 @@ public sealed class RespondToOfferCommandHandler : IRequestHandler<RespondToOffe
     }
 }
 
+public sealed class GetConversationMessagesQueryHandler : IRequestHandler<GetConversationMessagesQuery, IReadOnlyList<ConversationMessageDto>?>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+
+    public GetConversationMessagesQueryHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<IReadOnlyList<ConversationMessageDto>?> Handle(GetConversationMessagesQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+        }
+
+        var conversation = await _dbContext.Conversations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(entity => entity.Id == request.ConversationId && !entity.IsDeleted, cancellationToken);
+
+        if (conversation is null || (conversation.BuyerId != userId && conversation.ArtisanId != userId))
+        {
+            return null;
+        }
+
+        return await _dbContext.ConversationMessages
+            .AsNoTracking()
+            .Where(message => message.ConversationId == request.ConversationId && !message.IsDeleted)
+            .OrderBy(message => message.SentAt)
+            .Select(message => new ConversationMessageDto
+            {
+                Id = message.Id,
+                SenderId = message.SenderId,
+                SenderRole = message.SenderRole,
+                Content = message.Content,
+                SentAt = message.SentAt
+            })
+            .ToListAsync(cancellationToken);
+    }
+}
+
 public sealed class GetMyConversationsQueryHandler : IRequestHandler<GetMyConversationsQuery, IReadOnlyList<ConversationListDto>>
 {
     private readonly IMarketplaceDbContext _dbContext;

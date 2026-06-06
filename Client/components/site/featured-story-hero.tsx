@@ -1,15 +1,13 @@
-"use client"
 /* eslint-disable @next/next/no-img-element */
 
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { useCatalogSnapshot } from "@/lib/catalog-store"
+import type { ProductStory } from "@/app/artisan-panel/panel-types"
 
-export function FeaturedStoryHero() {
-  const { stories } = useCatalogSnapshot()
-  const featuredStory = stories.find((story) => story.isFeatured) ?? stories[0]
+export function FeaturedStoryHero({ story }: { story: ProductStory | null }) {
+  const featuredStory = story
 
   if (!featuredStory) {
     return null

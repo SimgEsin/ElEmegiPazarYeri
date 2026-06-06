@@ -3,6 +3,8 @@ using Marketplace.Application.Features.Products.Commands.CreateProduct;
 using Marketplace.Application.Features.Products.Commands.UpdateProduct;
 using Marketplace.Application.Features.Products.Queries.GetAllProducts;
 using Marketplace.Application.Features.Products.Queries.GetProductById;
+using Marketplace.Application.Features.Products.Queries.GetProductBySlug;
+using Marketplace.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,9 +32,16 @@ public sealed class ProductsController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] Guid? categoryId,
+        [FromQuery] string? categorySlug,
+        [FromQuery] Guid? artisanId,
+        [FromQuery] string? search,
+        [FromQuery] ProductStatus? status,
+        CancellationToken cancellationToken)
     {
-        var products = await _mediator.Send(new GetAllProductsQuery(), cancellationToken);
+        var query = new GetAllProductsQuery(categoryId, categorySlug, artisanId, search, status ?? ProductStatus.Published);
+        var products = await _mediator.Send(query, cancellationToken);
         return Ok(products);
     }
 
@@ -41,6 +50,14 @@ public sealed class ProductsController : ControllerBase
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var product = await _mediator.Send(new GetProductByIdQuery(id), cancellationToken);
+        return product is null ? NotFound() : Ok(product);
+    }
+
+    [HttpGet("slug/{slug}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetBySlug(string slug, CancellationToken cancellationToken)
+    {
+        var product = await _mediator.Send(new GetProductBySlugQuery(slug), cancellationToken);
         return product is null ? NotFound() : Ok(product);
     }
 

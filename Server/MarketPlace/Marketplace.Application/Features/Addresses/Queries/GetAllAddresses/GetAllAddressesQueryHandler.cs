@@ -1,5 +1,6 @@
 using MediatR;
 using Marketplace.Application.Common.Interfaces;
+using Marketplace.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Marketplace.Application.Features.Addresses.Queries.GetAllAddresses;
@@ -7,17 +8,24 @@ namespace Marketplace.Application.Features.Addresses.Queries.GetAllAddresses;
 public sealed class GetAllAddressesQueryHandler : IRequestHandler<GetAllAddressesQuery, IReadOnlyList<AddressListDto>>
 {
     private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
 
-    public GetAllAddressesQueryHandler(IMarketplaceDbContext dbContext)
+    public GetAllAddressesQueryHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
     {
         _dbContext = dbContext;
+        _currentUserService = currentUserService;
     }
 
     public async Task<IReadOnlyList<AddressListDto>> Handle(GetAllAddressesQuery request, CancellationToken cancellationToken)
     {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            return Array.Empty<AddressListDto>();
+        }
+
         return await _dbContext.Addresses
             .AsNoTracking()
-            .Where(address => !address.IsDeleted)
+            .Where(address => !address.IsDeleted && address.UserId == userId)
             .OrderBy(address => address.City)
             .ThenBy(address => address.Label)
             .Select(address => new AddressListDto

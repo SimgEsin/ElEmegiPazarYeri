@@ -3,13 +3,33 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { curatedCategories } from "@/lib/homepage-data"
+import { getCategories } from "@/lib/api/categories"
 
 export const metadata: Metadata = {
   title: "Kategoriler | El Emeği Sanat",
   description: "El emeği ürünlerin tematik kategorilerini keşfedin.",
 }
 
-export default function CategoriesPage() {
+export const dynamic = "force-dynamic"
+
+export default async function CategoriesPage() {
+  // Veri kaynağı API; tasarım/markup birebir aynı kalıyor. API alanları
+  // mevcut kartın beklediği şekle (title/imageSrc/imageAlt/description) map'leniyor.
+  const apiCategories = await getCategories().catch(() => [])
+  const categories =
+    apiCategories.length > 0
+      ? apiCategories.map((category) => {
+          const curated = curatedCategories.find((item) => item.slug === category.slug)
+          return {
+            slug: category.slug,
+            title: category.name,
+            description: category.description ?? curated?.description ?? "",
+            imageSrc: category.imageUrl?.trim() ? category.imageUrl : curated?.imageSrc ?? "/images/home/collection-weaving.png",
+            imageAlt: curated?.imageAlt ?? category.name,
+          }
+        })
+      : curatedCategories
+
   return (
     <div className="space-y-8 pb-8">
       <header className="space-y-3">
@@ -18,7 +38,7 @@ export default function CategoriesPage() {
       </header>
 
       <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        {curatedCategories.map((category) => (
+        {categories.map((category) => (
           <article key={category.slug} className="group overflow-hidden rounded-xl border border-primary/10 bg-card shadow-sm transition-shadow hover:shadow-xl">
             <Link href={`/categories/${category.slug}`} className="block">
               <div className="relative aspect-[3/4] overflow-hidden">

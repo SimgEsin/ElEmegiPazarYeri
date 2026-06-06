@@ -44,4 +44,11 @@ public sealed class ConversationsController : ControllerBase
         var conversations = await _mediator.Send(new GetMyConversationsQuery(), cancellationToken);
         return Ok(conversations);
     }
+
+    [HttpGet("{id:guid}/messages")]
+    public async Task<IActionResult> GetMessages(Guid id, CancellationToken cancellationToken)
+    {
+        var messages = await _mediator.Send(new GetConversationMessagesQuery(id), cancellationToken);
+        return messages is null ? NotFound() : Ok(messages);
+    }
 }

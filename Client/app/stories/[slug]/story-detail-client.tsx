@@ -5,12 +5,9 @@ import Link from "next/link"
 import { ArrowLeft, Clock3 } from "lucide-react"
 
 import { StoryRichText } from "@/components/site/story-rich-text"
-import { useCatalogSnapshot } from "@/lib/catalog-store"
+import type { ProductStory } from "@/app/artisan-panel/panel-types"
 
-export default function StoryDetailClient({ slug }: { slug: string }) {
-  const { stories } = useCatalogSnapshot()
-  const story = stories.find((item) => item.slug === slug)
-
+export default function StoryDetailClient({ story }: { story: ProductStory | null }) {
   if (!story) {
     return (
       <section className="rounded-2xl border border-primary/10 bg-card p-8 text-center shadow-sm">

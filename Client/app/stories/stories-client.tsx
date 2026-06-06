@@ -5,10 +5,9 @@ import Link from "next/link"
 import { ArrowRight, BookOpenText } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { useCatalogSnapshot } from "@/lib/catalog-store"
+import type { ProductStory } from "@/app/artisan-panel/panel-types"
 
-export default function StoriesClient() {
-  const { stories } = useCatalogSnapshot()
+export default function StoriesClient({ stories }: { stories: ProductStory[] }) {
   const featuredStory = stories.find((story) => story.isFeatured) ?? stories[0]
 
   return (

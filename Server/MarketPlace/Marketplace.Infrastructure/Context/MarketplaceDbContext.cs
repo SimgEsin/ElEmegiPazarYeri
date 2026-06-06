@@ -32,6 +32,7 @@ public class MarketplaceDbContext : DbContext, IMarketplaceDbContext
     public DbSet<ConversationMessage> ConversationMessages { get; set; }
     public DbSet<Offer> Offers { get; set; }
     public DbSet<Notification> Notifications { get; set; }
+    public DbSet<Follow> Follows { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -205,5 +206,20 @@ public class MarketplaceDbContext : DbContext, IMarketplaceDbContext
             .WithMany(conversation => conversation.Offers)
             .HasForeignKey(offer => offer.ConversationId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Follow>()
+            .HasOne(follow => follow.User)
+            .WithMany()
+            .HasForeignKey(follow => follow.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Follow>()
+            .HasOne(follow => follow.ArtisanProfile)
+            .WithMany()
+            .HasForeignKey(follow => follow.ArtisanProfileId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Follow>()
+            .HasIndex(follow => new { follow.UserId, follow.ArtisanProfileId });
     }
 }

@@ -41,6 +41,9 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
         product.Material = dto.Material;
         product.Technique = dto.Technique;
         product.ProductionDurationText = dto.ProductionDurationText;
+        product.HandcraftDurationText = dto.HandcraftDurationText;
+        product.Quote = dto.Quote;
+        product.ProductionStepsText = dto.ProductionStepsText;
         product.DeliveryInfoText = dto.DeliveryInfoText;
         product.Stock = dto.Stock;
         product.HeightText = dto.HeightText;

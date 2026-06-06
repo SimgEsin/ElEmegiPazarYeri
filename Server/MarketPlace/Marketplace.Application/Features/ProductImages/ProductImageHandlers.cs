@@ -107,9 +107,16 @@ public sealed class GetAllProductImagesQueryHandler : IRequestHandler<GetAllProd
 
     public async Task<IReadOnlyList<ProductImageDto>> Handle(GetAllProductImagesQuery request, CancellationToken cancellationToken)
     {
-        return await _dbContext.ProductImages
+        var query = _dbContext.ProductImages
             .AsNoTracking()
-            .Where(productImage => !productImage.IsDeleted)
+            .Where(productImage => !productImage.IsDeleted);
+
+        if (request.ProductId is not null)
+        {
+            query = query.Where(productImage => productImage.ProductId == request.ProductId);
+        }
+
+        return await query
             .OrderBy(productImage => productImage.SortOrder)
             .Select(productImage => new ProductImageDto
             {

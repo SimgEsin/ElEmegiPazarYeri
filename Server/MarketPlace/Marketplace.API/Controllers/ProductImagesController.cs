@@ -25,13 +25,15 @@ public sealed class ProductImagesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAll([FromQuery] Guid? productId, CancellationToken cancellationToken)
     {
-        var productImages = await _mediator.Send(new GetAllProductImagesQuery(), cancellationToken);
+        var productImages = await _mediator.Send(new GetAllProductImagesQuery(productId), cancellationToken);
         return Ok(productImages);
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var productImage = await _mediator.Send(new GetProductImageByIdQuery(id), cancellationToken);

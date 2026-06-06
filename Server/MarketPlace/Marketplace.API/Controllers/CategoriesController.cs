@@ -3,6 +3,7 @@ using Marketplace.Application.Features.Categories.Commands.DeleteCategory;
 using Marketplace.Application.Features.Categories.Commands.UpdateCategory;
 using Marketplace.Application.Features.Categories.Queries.GetAllCategories;
 using Marketplace.Application.Features.Categories.Queries.GetCategoryById;
+using Marketplace.Application.Features.Categories.Queries.GetCategoryBySlug;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -41,6 +42,14 @@ public sealed class CategoriesController : ControllerBase
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var category = await _mediator.Send(new GetCategoryByIdQuery(id), cancellationToken);
+        return category is null ? NotFound() : Ok(category);
+    }
+
+    [HttpGet("slug/{slug}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetBySlug(string slug, CancellationToken cancellationToken)
+    {
+        var category = await _mediator.Send(new GetCategoryBySlugQuery(slug), cancellationToken);
         return category is null ? NotFound() : Ok(category);
     }
 

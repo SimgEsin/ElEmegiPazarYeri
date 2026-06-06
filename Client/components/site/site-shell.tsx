@@ -2,11 +2,12 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { Heart, Search, Send, ShoppingBag, Store } from "lucide-react"
+import { Heart, Send, ShoppingBag, Store } from "lucide-react"
 import { useSyncExternalStore } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { HeaderSearch } from "@/components/site/header-search"
 import {
   getIsLoggedInSnapshot,
   getServerIsLoggedInSnapshot,
@@ -100,20 +101,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-5">
-              <form
-                className="group hidden items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors hover:border-primary/30 focus-within:border-primary/50 sm:flex"
-                role="search"
-                action="#"
-              >
-                <span className="inline-flex size-5 items-center justify-center text-muted-foreground transition-colors group-focus-within:text-primary">
-                  <Search className="size-3.5" strokeWidth={2.25} />
-                </span>
-                <Input
-                  className="h-auto w-40 border-none bg-transparent p-0 text-sm shadow-none placeholder:text-muted-foreground/80 focus:placeholder:text-transparent focus-visible:ring-0 md:w-52 lg:w-60"
-                  placeholder="Zanaatkar veya ürün ara..."
-                  aria-label="Ürün veya zanaatkar ara"
-                />
-              </form>
+              <HeaderSearch />
 
               <div className="flex gap-1.5">
                 <label className="flex items-center gap-2 rounded-full border border-input bg-background px-2.5 py-1.5 text-muted-foreground transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40">

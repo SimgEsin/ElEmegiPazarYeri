@@ -128,17 +128,30 @@ public sealed class GetAllProductReviewsQueryHandler : IRequestHandler<GetAllPro
 
     public async Task<IReadOnlyList<ProductReviewDto>> Handle(GetAllProductReviewsQuery request, CancellationToken cancellationToken)
     {
-        return await _dbContext.ProductReviews
+        var query = _dbContext.ProductReviews
             .AsNoTracking()
-            .Where(productReview => !productReview.IsDeleted)
+            .Where(productReview => !productReview.IsDeleted);
+
+        if (request.ProductId is not null)
+        {
+            query = query.Where(productReview => productReview.ProductId == request.ProductId);
+        }
+
+        return await query
             .OrderByDescending(productReview => productReview.CreatedAt)
             .Select(productReview => new ProductReviewDto
             {
                 Id = productReview.Id,
                 UserId = productReview.UserId,
+                UserFullName = productReview.User != null ? productReview.User.FullName : null,
+                UserAvatarUrl = productReview.User != null ? productReview.User.AvatarUrl : null,
                 ProductId = productReview.ProductId,
                 Rating = productReview.Rating,
                 Comment = productReview.Comment,
+                IsVerifiedBuyer = _dbContext.Orders.Any(order =>
+                    order.BuyerId == productReview.UserId
+                    && !order.IsDeleted
+                    && order.OrderItems.Any(item => item.ProductId == productReview.ProductId)),
                 CreatedAt = productReview.CreatedAt,
                 UpdatedAt = productReview.UpdatedAt
             })

@@ -25,6 +25,7 @@ public interface IMarketplaceDbContext
     DbSet<ConversationMessage> ConversationMessages { get; }
     DbSet<Offer> Offers { get; }
     DbSet<Notification> Notifications { get; }
+    DbSet<Follow> Follows { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

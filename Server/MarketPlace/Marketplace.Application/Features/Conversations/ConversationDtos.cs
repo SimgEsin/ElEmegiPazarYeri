@@ -42,3 +42,12 @@ public sealed class OfferSummaryDto
     public decimal ProposedPrice { get; init; }
     public OfferStatus Status { get; init; }
 }
+
+public sealed class ConversationMessageDto
+{
+    public Guid Id { get; init; }
+    public Guid SenderId { get; init; }
+    public MessageSenderRole SenderRole { get; init; }
+    public string Content { get; init; } = string.Empty;
+    public DateTime SentAt { get; init; }
+}

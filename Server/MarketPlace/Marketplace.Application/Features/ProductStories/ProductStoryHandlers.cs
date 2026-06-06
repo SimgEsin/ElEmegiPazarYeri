@@ -105,9 +105,16 @@ public sealed class GetAllProductStoriesQueryHandler : IRequestHandler<GetAllPro
 
     public async Task<IReadOnlyList<ProductStoryDto>> Handle(GetAllProductStoriesQuery request, CancellationToken cancellationToken)
     {
-        return await _dbContext.ProductStories
+        var query = _dbContext.ProductStories
             .AsNoTracking()
-            .Where(productStory => !productStory.IsDeleted)
+            .Where(productStory => !productStory.IsDeleted);
+
+        if (request.ProductId is not null)
+        {
+            query = query.Where(productStory => productStory.ProductId == request.ProductId);
+        }
+
+        return await query
             .OrderBy(productStory => productStory.SortOrder)
             .Select(productStory => new ProductStoryDto
             {

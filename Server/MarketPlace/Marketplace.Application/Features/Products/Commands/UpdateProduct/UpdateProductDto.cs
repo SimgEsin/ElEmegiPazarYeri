@@ -16,6 +16,9 @@ public sealed class UpdateProductDto
     public string? Material { get; init; }
     public string? Technique { get; init; }
     public string? ProductionDurationText { get; init; }
+    public string? HandcraftDurationText { get; init; }
+    public string? Quote { get; init; }
+    public string? ProductionStepsText { get; init; }
     public string? DeliveryInfoText { get; init; }
     public int Stock { get; init; }
     public string? HeightText { get; init; }

@@ -25,13 +25,15 @@ public sealed class ProductReviewsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAll([FromQuery] Guid? productId, CancellationToken cancellationToken)
     {
-        var productReviews = await _mediator.Send(new GetAllProductReviewsQuery(), cancellationToken);
+        var productReviews = await _mediator.Send(new GetAllProductReviewsQuery(productId), cancellationToken);
         return Ok(productReviews);
     }
 
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var productReview = await _mediator.Send(new GetProductReviewByIdQuery(id), cancellationToken);

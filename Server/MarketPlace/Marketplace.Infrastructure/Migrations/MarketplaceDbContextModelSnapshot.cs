@@ -407,6 +407,36 @@ namespace Marketplace.Infrastructure.Migrations
                     b.ToTable("Favorites");
                 });
 
+            modelBuilder.Entity("Marketplace.Domain.Entities.Follow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ArtisanProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtisanProfileId");
+
+                    b.HasIndex("UserId", "ArtisanProfileId");
+
+                    b.ToTable("Follows");
+                });
+
             modelBuilder.Entity("Marketplace.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -633,6 +663,9 @@ namespace Marketplace.Infrastructure.Migrations
                     b.Property<string>("DeliveryInfoText")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("HandcraftDurationText")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("HeightText")
                         .HasColumnType("nvarchar(max)");
 
@@ -654,6 +687,12 @@ namespace Marketplace.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ProductionDurationText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProductionStepsText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Quote")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("SalesMode")
@@ -1046,6 +1085,25 @@ namespace Marketplace.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Marketplace.Domain.Entities.Follow", b =>
+                {
+                    b.HasOne("Marketplace.Domain.Entities.ArtisanProfile", "ArtisanProfile")
+                        .WithMany()
+                        .HasForeignKey("ArtisanProfileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Marketplace.Domain.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ArtisanProfile");
 
                     b.Navigation("User");
                 });
