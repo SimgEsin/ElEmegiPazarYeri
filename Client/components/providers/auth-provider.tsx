@@ -61,6 +61,20 @@ function getTokenFromResponse(response: AuthResponse) {
   )
 }
 
+function getRolesClaim(payload: Record<string, unknown>): string[] {
+  const raw =
+    payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ??
+    payload["role"] ??
+    payload["roles"]
+
+  const values = Array.isArray(raw) ? raw : raw != null ? [raw] : []
+
+  return values
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+}
+
 function getStringClaim(payload: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = payload[key]
@@ -124,6 +138,7 @@ function decodeJwtPayload(token: string): AuthUser | null {
       lastName,
       fullName,
       name: fullName,
+      roles: getRolesClaim(parsedPayload),
     }
   } catch {
     return null

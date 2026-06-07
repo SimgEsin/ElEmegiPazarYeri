@@ -22,7 +22,8 @@ public sealed class GetProfileQueryHandler : IRequestHandler<GetProfileQuery, Ge
                 user.Email,
                 user.PhoneNumber,
                 user.DateOfBirth,
-                user.AvatarUrl))
+                user.AvatarUrl,
+                user.CreatedAt))
             .FirstOrDefaultAsync(cancellationToken);
     }
 }

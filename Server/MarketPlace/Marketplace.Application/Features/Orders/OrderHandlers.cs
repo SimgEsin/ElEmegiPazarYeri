@@ -140,6 +140,161 @@ public sealed class CheckoutCartCommandHandler : IRequestHandler<CheckoutCartCom
     }
 }
 
+public sealed class RequestOrderCancellationCommandHandler : IRequestHandler<RequestOrderCancellationCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+
+    public RequestOrderCancellationCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<bool> Handle(RequestOrderCancellationCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new InvalidOperationException("Iptal nedeni bos olamaz.");
+        }
+
+        var order = await _dbContext.Orders
+            .FirstOrDefaultAsync(
+                entity => entity.Id == request.OrderId && entity.BuyerId == userId && !entity.IsDeleted,
+                cancellationToken);
+
+        if (order is null)
+        {
+            return false;
+        }
+
+        if (order.Status == OrderStatus.Delivered || order.Status == OrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException("Bu siparis icin iptal talebi olusturulamaz.");
+        }
+
+        order.CancellationReason = request.Reason.Trim();
+        order.CancellationRequestedAt = DateTime.UtcNow;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        if (order.ArtisanId != userId)
+        {
+            var artisanNotification = new Notification
+            {
+                UserId = order.ArtisanId,
+                Type = NotificationType.Order,
+                Title = "Iptal talebi alindi",
+                Description = $"{order.OrderNo} numarali siparis icin iptal talebi olusturuldu.",
+                TargetModule = "orders",
+                TargetId = order.Id
+            };
+            await _dbContext.Notifications.AddAsync(artisanNotification, cancellationToken);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+}
+
+public sealed class GetArtisanOrdersQueryHandler : IRequestHandler<GetArtisanOrdersQuery, IReadOnlyList<ArtisanOrderDto>>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+
+    public GetArtisanOrdersQueryHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<IReadOnlyList<ArtisanOrderDto>> Handle(GetArtisanOrdersQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+        }
+
+        return await _dbContext.Orders
+            .AsNoTracking()
+            .Where(order => order.ArtisanId == userId && !order.IsDeleted)
+            .OrderByDescending(order => order.OrderDate)
+            .Select(order => new ArtisanOrderDto
+            {
+                Id = order.Id,
+                OrderNo = order.OrderNo,
+                CustomerName = order.Buyer != null ? order.Buyer.FullName : string.Empty,
+                ProductName = order.OrderItems
+                    .Where(item => !item.IsDeleted)
+                    .Select(item => item.ProductNameSnapshot)
+                    .FirstOrDefault() ?? string.Empty,
+                Quantity = order.OrderItems
+                    .Where(item => !item.IsDeleted)
+                    .Sum(item => item.Quantity),
+                TotalPrice = order.TotalPrice,
+                Status = order.Status,
+                OrderDate = order.OrderDate,
+                CancellationReason = order.CancellationReason,
+                CancellationRequestedAt = order.CancellationRequestedAt
+            })
+            .ToListAsync(cancellationToken);
+    }
+}
+
+public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrderStatusCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+
+    public UpdateOrderStatusCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<bool> Handle(UpdateOrderStatusCommand request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+        }
+
+        var order = await _dbContext.Orders
+            .FirstOrDefaultAsync(
+                entity => entity.Id == request.OrderId && entity.ArtisanId == userId && !entity.IsDeleted,
+                cancellationToken);
+
+        if (order is null)
+        {
+            return false;
+        }
+
+        order.Status = request.Status;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        if (order.BuyerId != userId)
+        {
+            var buyerNotification = new Notification
+            {
+                UserId = order.BuyerId,
+                Type = NotificationType.Order,
+                Title = "Siparis durumu guncellendi",
+                Description = $"{order.OrderNo} numarali siparisinizin durumu guncellendi.",
+                TargetModule = "orders",
+                TargetId = order.Id
+            };
+            await _dbContext.Notifications.AddAsync(buyerNotification, cancellationToken);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+}
+
 public sealed class GetMyOrdersQueryHandler : IRequestHandler<GetMyOrdersQuery, IReadOnlyList<OrderDto>>
 {
     private readonly IMarketplaceDbContext _dbContext;
@@ -166,6 +321,8 @@ public sealed class GetMyOrdersQueryHandler : IRequestHandler<GetMyOrdersQuery, 
                 OrderDate = order.OrderDate,
                 Status = order.Status,
                 TotalPrice = order.TotalPrice,
+                CancellationReason = order.CancellationReason,
+                CancellationRequestedAt = order.CancellationRequestedAt,
                 Items = order.OrderItems
                     .Where(item => !item.IsDeleted)
                     .Select(item => new OrderItemDto

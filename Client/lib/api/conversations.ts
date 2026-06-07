@@ -9,6 +9,22 @@ export type ConversationMessage = {
   sentAt: string
 }
 
+export type Agreement = {
+  id: string
+  conversationId: string
+  productId: string
+  productName: string
+  counterpartyName: string
+  proposedPrice: number
+  status: "Pending" | "Accepted" | "Rejected"
+  updatedAt: string
+}
+
+export async function getMyAgreements(): Promise<Agreement[]> {
+  const response = await apiClient.get<Agreement[]>("/conversations/agreements")
+  return response.data
+}
+
 export async function getMyConversations(): Promise<ConversationListItem[]> {
   const response = await apiClient.get<ConversationListItem[]>("/conversations")
   return response.data

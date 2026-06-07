@@ -25,7 +25,7 @@ export default function LoginPage() {
     const trimmedEmail = email.trim()
 
     if (!trimmedEmail || !password) {
-      setErrorMessage("Lutfen e-posta ve sifre alanlarini doldurun.")
+      setErrorMessage("Lütfen e-posta ve şifre alanlarını doldurun.")
       return
     }
 
@@ -38,7 +38,7 @@ export default function LoginPage() {
       })
       router.push("/")
     } catch {
-      setErrorMessage("Giris yapilamadi. E-posta veya sifre bilgilerinizi kontrol edin.")
+      setErrorMessage("Giriş yapılamadı. E-posta veya şifre bilgilerinizi kontrol edin.")
     } finally {
       setIsSubmitting(false)
     }
@@ -52,8 +52,8 @@ export default function LoginPage() {
             <UserRound className="size-5" />
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-2xl font-black tracking-tight">Giris Yap</CardTitle>
-            <CardDescription>Hesabiniza giris yaparak el emegi pazarina devam edin.</CardDescription>
+            <CardTitle className="text-2xl font-black tracking-tight">Giriş Yap</CardTitle>
+            <CardDescription>Hesabınıza giriş yaparak el emeği pazarına devam edin.</CardDescription>
           </div>
         </CardHeader>
 
@@ -84,7 +84,7 @@ export default function LoginPage() {
             </label>
 
             <label className="space-y-2 text-sm font-semibold">
-              <span>Sifre</span>
+              <span>Şifre</span>
               <div className="relative">
                 <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -92,7 +92,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Sifreniz"
+                  placeholder="Şifreniz"
                   className="h-10 pl-9"
                   autoComplete="current-password"
                   disabled={isSubmitting}
@@ -102,14 +102,14 @@ export default function LoginPage() {
             </label>
 
             <Button type="submit" size="lg" className="h-10 w-full font-semibold" disabled={isSubmitting}>
-              {isSubmitting ? "Giris yapiliyor..." : "Giris Yap"}
+              {isSubmitting ? "Giriş yapılıyor..." : "Giriş Yap"}
             </Button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            Hesabiniz yok mu?{" "}
+            Hesabınız yok mu?{" "}
             <Link href="/register" className="font-semibold text-primary hover:underline">
-              Kayit Ol
+              Kayıt Ol
             </Link>
           </p>
         </CardContent>

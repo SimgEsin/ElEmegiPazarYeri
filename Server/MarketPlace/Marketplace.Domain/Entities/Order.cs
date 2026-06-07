@@ -21,6 +21,8 @@ public class Order : BaseEntity
     public Guid? DeliveryAddressId { get; set; }
     public string ContactPhone { get; set; } = string.Empty;
     public string? Note { get; set; }
+    public string? CancellationReason { get; set; }
+    public DateTime? CancellationRequestedAt { get; set; }
 
     public AppUser? Buyer { get; set; }
     public AppUser? Artisan { get; set; }

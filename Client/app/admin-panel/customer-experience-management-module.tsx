@@ -1,43 +1,43 @@
+import type { ProductReview } from "@/lib/api/types"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-const experienceEntries = [
-  {
-    customer: "Ece S.",
-    subject: "Hasır Sunum Tepsisi",
-    mood: "5/5",
-    note: "Paket açılışındaki kart notu ve doğal doku beklentimin üstündeydi.",
-  },
-  {
-    customer: "Mert A.",
-    subject: "Gün Batımı Cam Koleksiyonu",
-    mood: "4/5",
-    note: "Teslimat aşaması biraz uzadı ama ürünün rengi ve işçiliği çok başarılı.",
-  },
-]
+type CustomerExperienceManagementModuleProps = {
+  reviews: ProductReview[]
+}
 
-export default function CustomerExperienceManagementModule() {
+export default function CustomerExperienceManagementModule({ reviews }: CustomerExperienceManagementModuleProps) {
   return (
     <Card className="border-primary/10 bg-background/85">
       <CardHeader>
         <CardTitle>Müşteri Deneyim Listesi</CardTitle>
-        <CardDescription>Yayınlanan müşteri deneyimleri.</CardDescription>
+        <CardDescription>Yayınlanan müşteri değerlendirmeleri.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {experienceEntries.map((item) => (
-          <div key={item.customer + item.subject} className="rounded-2xl border border-primary/10 bg-muted/20 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold">{item.customer}</p>
-                <p className="text-xs text-muted-foreground">{item.subject}</p>
+        {reviews.length > 0 ? (
+          reviews.map((review) => (
+            <div key={review.id} className="rounded-2xl border border-primary/10 bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{review.userFullName ?? "Müşteri"}</p>
+                  {review.isVerifiedBuyer ? (
+                    <p className="text-xs text-muted-foreground">Doğrulanmış alıcı</p>
+                  ) : null}
+                </div>
+                <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-primary">
+                  {review.rating}/5
+                </Badge>
               </div>
-              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-primary">
-                {item.mood}
-              </Badge>
+              {review.comment ? (
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{review.comment}</p>
+              ) : null}
             </div>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">{item.note}</p>
+          ))
+        ) : (
+          <div className="rounded-2xl border border-dashed border-primary/15 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+            Henüz yayınlanmış müşteri değerlendirmesi yok.
           </div>
-        ))}
+        )}
       </CardContent>
     </Card>
   )

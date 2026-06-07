@@ -2,33 +2,18 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { Heart, Send, ShoppingBag, Store } from "lucide-react"
-import { useSyncExternalStore } from "react"
+import { usePathname } from "next/navigation"
+import { ArrowLeft, Heart, LogOut, Send, ShoppingBag, Store } from "lucide-react"
+import { useEffect, useState } from "react"
 
+import { useAuth } from "@/components/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { HeaderSearch } from "@/components/site/header-search"
-import {
-  getIsLoggedInSnapshot,
-  getServerIsLoggedInSnapshot,
-  getServerUserTypeSnapshot,
-  getUserTypeSnapshot,
-  setIsLoggedIn,
-  setUserType,
-  subscribeToIsLoggedIn,
-  subscribeToUserType,
-  type UserType,
-} from "@/lib/auth-storage"
 
 const primaryLinks = [
   { href: "/categories", label: "Kategoriler" },
   { href: "/stories", label: "Hikayeler" },
-]
-
-const userTypeOptions: { value: UserType; label: string }[] = [
-  { value: "customer", label: "Müşteri" },
-  { value: "artisan", label: "Zanaatkar" },
-  { value: "admin", label: "Admin" },
 ]
 
 const footerGroups = [
@@ -63,18 +48,42 @@ const profileImage =
 
 export function SiteShell({ children }: { children: React.ReactNode }) {
   const year = new Date().getFullYear()
-  const isLoggedIn = useSyncExternalStore(
-    subscribeToIsLoggedIn,
-    getIsLoggedInSnapshot,
-    getServerIsLoggedInSnapshot,
-  )
-  const userType = useSyncExternalStore(
-    subscribeToUserType,
-    getUserTypeSnapshot,
-    getServerUserTypeSnapshot,
-  )
-  const isAdmin = userType === "admin"
-  const isArtisan = userType === "artisan"
+  const { isAuthenticated, logout, user } = useAuth()
+  const [mounted, setMounted] = useState(false)
+  const pathname = usePathname()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const isLoggedIn = mounted && isAuthenticated
+  const roles = (mounted && user?.roles) || []
+  const isAdmin = roles.includes("admin")
+  const isArtisan = roles.includes("artisan")
+
+  const isPanelRoute =
+    pathname?.startsWith("/admin-panel") || pathname?.startsWith("/artisan-panel")
+
+  if (isPanelRoute) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <div className="flex items-center border-b border-border px-4 py-3 sm:px-6">
+          <Button
+            asChild
+            size="sm"
+            variant="ghost"
+            className="rounded-full text-muted-foreground hover:text-foreground"
+          >
+            <Link href="/">
+              <ArrowLeft className="size-4" />
+              Siteye Dön
+            </Link>
+          </Button>
+        </div>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -104,21 +113,6 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
               <HeaderSearch />
 
               <div className="flex gap-1.5">
-                <label className="flex items-center gap-2 rounded-full border border-input bg-background px-2.5 py-1.5 text-muted-foreground transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40">
-                  <span className="hidden text-xs font-medium sm:inline">Kullanıcı Türü</span>
-                  <select
-                    aria-label="Kullanıcı türü seç"
-                    value={userType}
-                    onChange={(event) => setUserType(event.target.value as UserType)}
-                    className="min-w-0 bg-transparent text-xs font-medium text-foreground outline-none sm:text-sm"
-                  >
-                    {userTypeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 {isAdmin ? (
                   <Button
                     asChild
@@ -169,17 +163,25 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
               </div>
 
               {isLoggedIn ? (
-                <Link href="/profile" className="hidden size-9 overflow-hidden rounded-full border border-border bg-muted/40 transition-shadow hover:shadow-md sm:block">
-                  <Image src={profileImage} alt="Gülümseyen kullanıcı profil fotoğrafı." width={40} height={40} />
-                </Link>
+                <div className="hidden items-center gap-1.5 sm:flex">
+                  <Link href="/profile" className="size-9 overflow-hidden rounded-full border border-border bg-muted/40 transition-shadow hover:shadow-md">
+                    <Image src={profileImage} alt="Gülümseyen kullanıcı profil fotoğrafı." width={40} height={40} />
+                  </Link>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Çıkış yap"
+                    onClick={logout}
+                    className="rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut />
+                  </Button>
+                </div>
               ) : (
-                <Link
-                  href="/"
-                  onClick={() => setIsLoggedIn(true)}
-                  className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:block"
-                >
-                  Giriş yap
-                </Link>
+                <Button asChild size="sm" className="hidden rounded-full px-4 font-semibold sm:inline-flex">
+                  <Link href="/login">Giriş Yap</Link>
+                </Button>
               )}
             </div>
           </div>

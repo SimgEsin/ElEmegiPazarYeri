@@ -31,6 +31,13 @@ public sealed class CartsController : ControllerBase
         return Ok(cartItemId);
     }
 
+    [HttpPut("items/{itemId:guid}")]
+    public async Task<IActionResult> UpdateCartItem(Guid itemId, [FromBody] UpdateCartItemDto dto, CancellationToken cancellationToken)
+    {
+        var updated = await _mediator.Send(new UpdateCartItemCommand(itemId, dto.Quantity), cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
     [HttpDelete("items/{itemId:guid}")]
     public async Task<IActionResult> RemoveFromCart(Guid itemId, CancellationToken cancellationToken)
     {

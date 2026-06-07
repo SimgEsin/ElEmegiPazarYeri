@@ -1,6 +1,7 @@
 ﻿using Marketplace.Application.Common.Interfaces;
 using Marketplace.Infrastructure;
 using Marketplace.Infrastructure.Context;
+using Marketplace.Infrastructure.Seed;
 using Marketplace.Infrastructure.SignalR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -136,6 +137,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<MarketplaceDbContext>();
     await dbContext.Database.MigrateAsync();
+    await DbSeeder.SeedAsync(dbContext);
 }
 
 if (app.Environment.IsDevelopment())

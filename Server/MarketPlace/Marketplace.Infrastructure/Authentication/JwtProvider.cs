@@ -39,6 +39,11 @@ public class JwtProvider : IJwtProvider
             new Claim(ClaimTypes.MobilePhone, user.Phone ?? "")
         };
 
+        foreach (var userRole in user.UserRoles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, userRole.Role.ToString()));
+        }
+
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 

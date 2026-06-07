@@ -28,6 +28,7 @@ public sealed class ConversationListDto
     public string ProductName { get; init; } = string.Empty;
     public string? ProductImageUrl { get; init; }
     public Guid BuyerId { get; init; }
+    public string BuyerDisplayName { get; init; } = string.Empty;
     public Guid ArtisanId { get; init; }
     public Guid? ArtisanProfileId { get; init; }
     public string ArtisanDisplayName { get; init; } = string.Empty;
@@ -41,6 +42,18 @@ public sealed class OfferSummaryDto
     public Guid Id { get; init; }
     public decimal ProposedPrice { get; init; }
     public OfferStatus Status { get; init; }
+}
+
+public sealed class AgreementDto
+{
+    public Guid Id { get; init; }
+    public Guid ConversationId { get; init; }
+    public Guid ProductId { get; init; }
+    public string ProductName { get; init; } = string.Empty;
+    public string CounterpartyName { get; init; } = string.Empty;
+    public decimal ProposedPrice { get; init; }
+    public OfferStatus Status { get; init; }
+    public DateTime UpdatedAt { get; init; }
 }
 
 public sealed class ConversationMessageDto

@@ -24,3 +24,8 @@ public sealed class AddToCartDto
     public required Guid ProductId { get; init; }
     public int Quantity { get; init; }
 }
+
+public sealed class UpdateCartItemDto
+{
+    public int Quantity { get; init; }
+}

@@ -45,6 +45,13 @@ public sealed class ConversationsController : ControllerBase
         return Ok(conversations);
     }
 
+    [HttpGet("agreements")]
+    public async Task<IActionResult> GetMyAgreements(CancellationToken cancellationToken)
+    {
+        var agreements = await _mediator.Send(new GetMyAgreementsQuery(), cancellationToken);
+        return Ok(agreements);
+    }
+
     [HttpGet("{id:guid}/messages")]
     public async Task<IActionResult> GetMessages(Guid id, CancellationToken cancellationToken)
     {

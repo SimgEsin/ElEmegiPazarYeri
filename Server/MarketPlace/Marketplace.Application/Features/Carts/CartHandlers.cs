@@ -171,6 +171,66 @@ public sealed class AddToCartCommandHandler : IRequestHandler<AddToCartCommand, 
     }
 }
 
+public sealed class UpdateCartItemCommandHandler : IRequestHandler<UpdateCartItemCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+
+    public UpdateCartItemCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<bool> Handle(UpdateCartItemCommand request, CancellationToken cancellationToken)
+    {
+        if (request.Quantity <= 0)
+        {
+            throw new InvalidOperationException("Adet 0'dan buyuk olmalidir.");
+        }
+
+        var userId = GetCurrentUserId();
+
+        var cartItem = await _dbContext.CartItems
+            .Include(entity => entity.Cart)
+            .Include(entity => entity.Product)
+            .FirstOrDefaultAsync(
+                entity => entity.Id == request.CartItemId
+                    && !entity.IsDeleted
+                    && entity.Cart != null
+                    && entity.Cart.UserId == userId
+                    && !entity.Cart.IsDeleted,
+                cancellationToken);
+
+        if (cartItem is null)
+        {
+            return false;
+        }
+
+        if (cartItem.Product is null || cartItem.Product.Stock < request.Quantity)
+        {
+            throw new InvalidOperationException("Yetersiz Stok.");
+        }
+
+        cartItem.Quantity = request.Quantity;
+        cartItem.UnitPriceSnapshot = cartItem.Product.Price;
+        cartItem.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        if (Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+    }
+}
+
 public sealed class RemoveFromCartCommandHandler : IRequestHandler<RemoveFromCartCommand, bool>
 {
     private readonly IMarketplaceDbContext _dbContext;

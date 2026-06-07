@@ -7,11 +7,20 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  createArtisanProfile,
+  getMyArtisanProfile,
+  updateArtisanProfile,
+  type ArtisanProfilePayload,
+} from "@/lib/api/artisans"
+import type { ArtisanProfileDetails } from "@/lib/api/types"
+import { createSlug } from "@/lib/catalog"
 
 type ImageAsset = {
-  file: File
+  file?: File
   previewUrl: string
   name: string
+  origin: "saved" | "local"
 }
 
 type ProfileFormState = {
@@ -22,10 +31,26 @@ type ProfileFormState = {
 }
 
 const initialFormState: ProfileFormState = {
-  name: "Elif Taner",
-  title: "Seramik Sanatçısı",
-  location: "İstanbul, Türkiye",
-  story: "Toprakla kurduğum bağı her eserime taşıyor, her üretimde sakinliği ve sıcaklığı görünür kılmayı hedefliyorum.",
+  name: "",
+  title: "",
+  location: "",
+  story: "",
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
+    reader.onerror = () => reject(new Error("Görsel okunamadı."))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function resolveAssetUrl(asset: ImageAsset): Promise<string> {
+  if (asset.origin === "local" && asset.file) {
+    return fileToDataUrl(asset.file)
+  }
+  return asset.previewUrl
 }
 
 export default function ProfileManagementModule() {
@@ -34,6 +59,9 @@ export default function ProfileManagementModule() {
   const [kitchenMoments, setKitchenMoments] = useState<ImageAsset[]>([])
   const [errorMessage, setErrorMessage] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [existingProfile, setExistingProfile] = useState<ArtisanProfileDetails | null>(null)
   const profileImageRef = useRef<ImageAsset | null>(null)
   const kitchenMomentsRef = useRef<ImageAsset[]>([])
 
@@ -46,12 +74,61 @@ export default function ProfileManagementModule() {
   }, [kitchenMoments])
 
   useEffect(() => {
+    let isMounted = true
+
+    async function loadProfile() {
+      try {
+        const profile = await getMyArtisanProfile()
+        if (!isMounted || !profile) {
+          return
+        }
+
+        setExistingProfile(profile)
+        setForm({
+          name: profile.displayName ?? "",
+          title: profile.craft ?? "",
+          location: profile.city ?? "",
+          story: profile.bio ?? "",
+        })
+        setProfileImage(
+          profile.avatarUrl
+            ? { previewUrl: profile.avatarUrl, name: "Profil görseli", origin: "saved" }
+            : null,
+        )
+        setKitchenMoments(
+          (profile.galleryImages ?? []).map((image) => ({
+            previewUrl: image.url,
+            name: image.name,
+            origin: "saved" as const,
+          })),
+        )
+      } catch {
+        // henüz profil yoksa boş formla devam et
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadProfile()
+
     return () => {
-      if (profileImageRef.current) {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (profileImageRef.current?.origin === "local") {
         URL.revokeObjectURL(profileImageRef.current.previewUrl)
       }
 
-      kitchenMomentsRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+      kitchenMomentsRef.current.forEach((image) => {
+        if (image.origin === "local") {
+          URL.revokeObjectURL(image.previewUrl)
+        }
+      })
     }
   }, [])
 
@@ -66,6 +143,7 @@ export default function ProfileManagementModule() {
       file,
       previewUrl: URL.createObjectURL(file),
       name: file.name,
+      origin: "local",
     }
   }
 
@@ -84,7 +162,7 @@ export default function ProfileManagementModule() {
     }
 
     setProfileImage((current) => {
-      if (current) {
+      if (current?.origin === "local") {
         URL.revokeObjectURL(current.previewUrl)
       }
 
@@ -97,7 +175,7 @@ export default function ProfileManagementModule() {
 
   function removeProfileImage() {
     setProfileImage((current) => {
-      if (current) {
+      if (current?.origin === "local") {
         URL.revokeObjectURL(current.previewUrl)
       }
 
@@ -128,7 +206,7 @@ export default function ProfileManagementModule() {
     setKitchenMoments((current) => {
       const imageToRemove = current.find((image) => image.previewUrl === previewUrl)
 
-      if (imageToRemove) {
+      if (imageToRemove?.origin === "local") {
         URL.revokeObjectURL(imageToRemove.previewUrl)
       }
 
@@ -138,7 +216,7 @@ export default function ProfileManagementModule() {
     setSuccessMessage("")
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.name.trim() || !form.title.trim() || !form.location.trim() || !form.story.trim()) {
       setErrorMessage("Lütfen zorunlu profil alanlarını doldurun.")
       setSuccessMessage("")
@@ -157,8 +235,61 @@ export default function ProfileManagementModule() {
       return
     }
 
+    setIsSaving(true)
     setErrorMessage("")
-    setSuccessMessage("Profil yönetimi bilgileri kaydedildi.")
+    setSuccessMessage("")
+
+    try {
+      const avatarUrl = await resolveAssetUrl(profileImage)
+      const galleryUrls = await Promise.all(kitchenMoments.map(resolveAssetUrl))
+
+      const payload: ArtisanProfilePayload = {
+        slug: existingProfile?.slug || createSlug(form.name),
+        displayName: form.name.trim(),
+        craft: form.title.trim(),
+        city: form.location.trim(),
+        bio: form.story.trim(),
+        avatarUrl,
+        ratingAvg: existingProfile?.ratingAvg ?? 0,
+        followerCount: existingProfile?.followerCount ?? 0,
+        productCount: existingProfile?.productCount ?? 0,
+        isVerified: existingProfile?.isVerified ?? false,
+        galleryImages: galleryUrls.map((url, index) => ({
+          name: kitchenMoments[index].name,
+          url,
+          sortOrder: index,
+        })),
+      }
+
+      if (existingProfile) {
+        await updateArtisanProfile(existingProfile.id, payload)
+      } else {
+        await createArtisanProfile(payload)
+      }
+
+      const refreshed = await getMyArtisanProfile()
+      if (refreshed) {
+        setExistingProfile(refreshed)
+        setProfileImage(
+          refreshed.avatarUrl
+            ? { previewUrl: refreshed.avatarUrl, name: "Profil görseli", origin: "saved" }
+            : null,
+        )
+        setKitchenMoments(
+          (refreshed.galleryImages ?? []).map((image) => ({
+            previewUrl: image.url,
+            name: image.name,
+            origin: "saved" as const,
+          })),
+        )
+      }
+
+      setSuccessMessage("Profil yönetimi bilgileri kaydedildi.")
+    } catch {
+      setErrorMessage("Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -215,9 +346,11 @@ export default function ProfileManagementModule() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{profileImage.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(profileImage.file.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
+                  {profileImage.file ? (
+                    <p className="text-xs text-muted-foreground">
+                      {(profileImage.file.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -257,7 +390,9 @@ export default function ProfileManagementModule() {
                     <div className="flex items-center justify-between gap-3 p-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{image.name}</p>
-                        <p className="text-xs text-muted-foreground">{(image.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        {image.file ? (
+                          <p className="text-xs text-muted-foreground">{(image.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        ) : null}
                       </div>
                       <Button type="button" variant="ghost" size="sm" onClick={() => removeKitchenMoment(image.previewUrl)}>
                         Kaldır
@@ -306,8 +441,8 @@ export default function ProfileManagementModule() {
       {successMessage ? <p className="text-sm font-medium text-primary">{successMessage}</p> : null}
 
       <div className="flex justify-end">
-        <Button type="button" onClick={handleSave}>
-          Profili Kaydet
+        <Button type="button" onClick={handleSave} disabled={isLoading || isSaving}>
+          {isSaving ? "Kaydediliyor..." : "Profili Kaydet"}
         </Button>
       </div>
     </div>

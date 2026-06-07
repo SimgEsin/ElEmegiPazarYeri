@@ -15,6 +15,8 @@ public class MarketplaceDbContext : DbContext, IMarketplaceDbContext
     public DbSet<AppUser> Users { get; set; }
     public DbSet<UserRole> UserRoles { get; set; }
     public DbSet<ArtisanProfile> ArtisanProfiles { get; set; }
+    public DbSet<ArtisanProfileImage> ArtisanProfileImages { get; set; }
+    public DbSet<ArtisanSalesSettings> ArtisanSalesSettings { get; set; }
     public DbSet<Address> Addresses { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<Product> Products { get; set; }
@@ -41,6 +43,22 @@ public class MarketplaceDbContext : DbContext, IMarketplaceDbContext
         modelBuilder.Entity<ArtisanProfile>()
             .Property(artisanProfile => artisanProfile.RatingAvg)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<ArtisanProfileImage>()
+            .HasOne(image => image.ArtisanProfile)
+            .WithMany(profile => profile.GalleryImages)
+            .HasForeignKey(image => image.ArtisanProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ArtisanSalesSettings>()
+            .HasOne(settings => settings.User)
+            .WithMany()
+            .HasForeignKey(settings => settings.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ArtisanSalesSettings>()
+            .HasIndex(settings => settings.UserId)
+            .IsUnique();
 
         modelBuilder.Entity<CartItem>()
             .Property(cartItem => cartItem.UnitPriceSnapshot)

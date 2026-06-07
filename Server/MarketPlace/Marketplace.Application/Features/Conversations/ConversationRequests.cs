@@ -7,3 +7,4 @@ public sealed record MakeOfferCommand(MakeOfferDto Offer) : IRequest<Guid>;
 public sealed record RespondToOfferCommand(Guid Id, RespondToOfferDto Offer) : IRequest<bool>;
 public sealed record GetMyConversationsQuery : IRequest<IReadOnlyList<ConversationListDto>>;
 public sealed record GetConversationMessagesQuery(Guid ConversationId) : IRequest<IReadOnlyList<ConversationMessageDto>?>;
+public sealed record GetMyAgreementsQuery : IRequest<IReadOnlyList<AgreementDto>>;

@@ -5,4 +5,5 @@ public sealed record GetProfileDto(
     string Email,
     string? PhoneNumber,
     DateTime? DateOfBirth,
-    string? AvatarUrl);
+    string? AvatarUrl,
+    DateTime RegisterDate);

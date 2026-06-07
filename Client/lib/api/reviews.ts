@@ -6,6 +6,11 @@ export async function getProductReviews(productId: string): Promise<ProductRevie
   return response.data
 }
 
+export async function getAllReviews(options?: { signal?: AbortSignal }): Promise<ProductReview[]> {
+  const response = await apiClient.get<ProductReview[]>("/productreviews", { signal: options?.signal })
+  return response.data
+}
+
 export async function createReview(productId: string, rating: number, comment?: string): Promise<string> {
   // POST binds CreateProductReviewCommand(CreateProductReviewDto ProductReview).
   const response = await apiClient.post<string>("/productreviews", {

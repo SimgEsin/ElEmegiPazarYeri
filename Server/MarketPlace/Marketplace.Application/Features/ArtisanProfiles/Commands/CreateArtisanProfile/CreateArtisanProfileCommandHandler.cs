@@ -28,11 +28,28 @@ public sealed class CreateArtisanProfileCommandHandler : IRequestHandler<CreateA
             Craft = dto.Craft,
             City = dto.City,
             Bio = dto.Bio,
+            AvatarUrl = dto.AvatarUrl,
             RatingAvg = dto.RatingAvg,
             FollowerCount = dto.FollowerCount,
             ProductCount = dto.ProductCount,
             IsVerified = dto.IsVerified
         };
+
+        if (dto.GalleryImages is not null)
+        {
+            var sortOrder = 0;
+            foreach (var image in dto.GalleryImages)
+            {
+                artisanProfile.GalleryImages.Add(new ArtisanProfileImage
+                {
+                    Name = image.Name,
+                    Url = image.Url,
+                    AltText = image.AltText,
+                    SortOrder = image.SortOrder == 0 ? sortOrder : image.SortOrder
+                });
+                sortOrder++;
+            }
+        }
 
         await _dbContext.ArtisanProfiles.AddAsync(artisanProfile, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);

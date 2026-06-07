@@ -138,6 +138,8 @@ export type Order = {
   orderDate: string
   status: OrderStatus
   totalPrice: number
+  cancellationReason?: string | null
+  cancellationRequestedAt?: string | null
   items: OrderItem[]
 }
 
@@ -194,6 +196,45 @@ export type ArtisanProfile = {
   isVerified: boolean
 }
 
+export type ArtisanProfileImage = {
+  id: string
+  name: string
+  url: string
+  altText?: string | null
+  sortOrder: number
+}
+
+export type ArtisanProfileDetails = ArtisanProfile & {
+  avatarUrl?: string | null
+  createdAt?: string
+  updatedAt?: string | null
+  galleryImages: ArtisanProfileImage[]
+}
+
+export type ArtisanOrder = {
+  id: string
+  orderNo: string
+  customerName: string
+  productName: string
+  quantity: number
+  totalPrice: number
+  status: OrderStatus
+  orderDate: string
+  cancellationReason?: string | null
+  cancellationRequestedAt?: string | null
+}
+
+export type SalesSettings = {
+  id: string
+  companyTitle: string
+  taxNumber: string
+  taxOffice: string
+  accountHolder: string
+  iban: string
+  bankName: string
+  shippingCompany: string
+}
+
 export type OfferSummary = {
   id: string
   proposedPrice: number
@@ -206,6 +247,7 @@ export type ConversationListItem = {
   productName: string
   productImageUrl?: string | null
   buyerId: string
+  buyerDisplayName?: string | null
   artisanId: string
   artisanProfileId?: string | null
   artisanDisplayName: string

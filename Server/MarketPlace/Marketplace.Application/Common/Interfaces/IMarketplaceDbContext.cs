@@ -8,6 +8,8 @@ public interface IMarketplaceDbContext
     DbSet<AppUser> Users { get; }
     DbSet<UserRole> UserRoles { get; }
     DbSet<ArtisanProfile> ArtisanProfiles { get; }
+    DbSet<ArtisanProfileImage> ArtisanProfileImages { get; }
+    DbSet<ArtisanSalesSettings> ArtisanSalesSettings { get; }
     DbSet<Address> Addresses { get; }
     DbSet<Category> Categories { get; }
     DbSet<Product> Products { get; }

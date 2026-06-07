@@ -1,10 +1,12 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, ShoppingBag } from "lucide-react"
 import { FormEvent, useEffect, useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { checkout } from "@/lib/api/orders"
 import {
   CART_CHECKOUT_ITEMS_STORAGE_KEY,
   type CartLineItem,
@@ -106,37 +108,19 @@ function isValidCartLineItem(value: unknown): value is CartLineItem {
   }
 
   const record = value as Partial<CartLineItem>
-  if (typeof record.quantity !== "number" || record.quantity < 1 || typeof record.buyerNote !== "string") {
-    return false
-  }
-
-  if (typeof record.product !== "object" || record.product === null) {
-    return false
-  }
-
-  const product = record.product as Record<string, unknown>
-  const artisan = product.artisan as Record<string, unknown> | undefined
   return (
-    typeof product.id === "string" &&
-    typeof product.slug === "string" &&
-    typeof product.name === "string" &&
-    typeof product.categorySlug === "string" &&
-    typeof product.categoryName === "string" &&
-    typeof product.shortDescription === "string" &&
-    typeof product.story === "string" &&
-    typeof product.productionTime === "string" &&
-    typeof product.price === "number" &&
-    typeof product.customizable === "boolean" &&
-    typeof artisan === "object" &&
-    artisan !== null &&
-    typeof artisan.name === "string" &&
-    typeof artisan.city === "string" &&
-    typeof artisan.craft === "string" &&
-    typeof artisan.yearsOfPractice === "number"
+    typeof record.id === "string" &&
+    typeof record.productId === "string" &&
+    typeof record.productName === "string" &&
+    typeof record.quantity === "number" &&
+    record.quantity >= 1 &&
+    typeof record.unitPrice === "number" &&
+    typeof record.totalPrice === "number"
   )
 }
 
 export function CartCheckoutClient({ initialItems }: CartCheckoutClientProps) {
+  const router = useRouter()
   const [items, setItems] = useState(initialItems)
   const [deliveryContacts, setDeliveryContacts] = useState<DeliveryContact[]>([])
   const [selectedDeliveryContactId, setSelectedDeliveryContactId] = useState("")
@@ -152,6 +136,7 @@ export function CartCheckoutClient({ initialItems }: CartCheckoutClientProps) {
   const [selectedPaymentId, setSelectedPaymentId] = useState("")
   const [stepError, setStepError] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     const storedCheckoutItems = window.localStorage.getItem(CART_CHECKOUT_ITEMS_STORAGE_KEY)
@@ -248,7 +233,7 @@ export function CartCheckoutClient({ initialItems }: CartCheckoutClientProps) {
   }, [deliveryContacts, selectedDeliveryContactId])
 
   const subtotal = useMemo(
-    () => items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    () => items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     [items]
   )
   const selectedDeliveryContact = deliveryContacts.find((contact) => contact.id === selectedDeliveryContactId) ?? null
@@ -326,14 +311,25 @@ export function CartCheckoutClient({ initialItems }: CartCheckoutClientProps) {
     setCurrentStepIndex((prev) => Math.min(prev + 1, checkoutSteps.length - 1))
   }
 
-  const handleCreateOrder = () => {
-    if (!isCheckoutReady) {
+  const handleCreateOrder = async () => {
+    if (!isCheckoutReady || isSubmitting) {
       setStepError("Siparişi oluşturmadan önce tüm adımları tamamlayın.")
       return
     }
 
     setStepError("")
-    setIsSubmitted(true)
+    setIsSubmitting(true)
+
+    try {
+      await checkout()
+      window.localStorage.removeItem(CART_CHECKOUT_ITEMS_STORAGE_KEY)
+      setIsSubmitted(true)
+      router.push("/cart/checkout/success")
+    } catch (error) {
+      console.error("Sipariş oluşturulamadı:", error)
+      setStepError("Sipariş oluşturulamadı. Lütfen daha sonra tekrar deneyin.")
+      setIsSubmitting(false)
+    }
   }
 
   if (items.length === 0) {
@@ -619,11 +615,11 @@ export function CartCheckoutClient({ initialItems }: CartCheckoutClientProps) {
               <dt className="font-semibold text-muted-foreground">Ürünler</dt>
               <dd className="space-y-2 leading-relaxed text-foreground">
                 {items.map((item) => (
-                  <div key={item.product.id} className="flex items-center justify-between gap-3">
+                  <div key={item.id} className="flex items-center justify-between gap-3">
                     <span>
-                      {item.product.name} x {item.quantity}
+                      {item.productName} x {item.quantity}
                     </span>
-                    <span>{formatCurrency(item.product.price * item.quantity)}</span>
+                    <span>{formatCurrency(item.unitPrice * item.quantity)}</span>
                   </div>
                 ))}
               </dd>
@@ -658,11 +654,11 @@ export function CartCheckoutClient({ initialItems }: CartCheckoutClientProps) {
           <button
             type="button"
             onClick={handleCreateOrder}
-            disabled={!isCheckoutReady || isSubmitted}
+            disabled={!isCheckoutReady || isSubmitted || isSubmitting}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <ShoppingBag className="size-4" />
-            Siparişi Oluştur
+            {isSubmitting ? "Sipariş oluşturuluyor..." : "Siparişi Oluştur"}
           </button>
         </aside>
       </div>

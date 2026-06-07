@@ -120,6 +120,9 @@ namespace Marketplace.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AvatarUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Bio")
                         .HasColumnType("nvarchar(max)");
 
@@ -170,6 +173,99 @@ namespace Marketplace.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ArtisanProfiles");
+                });
+
+            modelBuilder.Entity("Marketplace.Domain.Entities.ArtisanProfileImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AltText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ArtisanProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtisanProfileId");
+
+                    b.ToTable("ArtisanProfileImages");
+                });
+
+            modelBuilder.Entity("Marketplace.Domain.Entities.ArtisanSalesSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountHolder")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyTitle")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Iban")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ShippingCompany")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TaxOffice")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("ArtisanSalesSettings");
                 });
 
             modelBuilder.Entity("Marketplace.Domain.Entities.Cart", b =>
@@ -527,6 +623,12 @@ namespace Marketplace.Infrastructure.Migrations
 
                     b.Property<Guid>("BuyerId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CancellationReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CancellationRequestedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ContactPhone")
                         .IsRequired()
@@ -983,6 +1085,28 @@ namespace Marketplace.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Marketplace.Domain.Entities.ArtisanProfileImage", b =>
+                {
+                    b.HasOne("Marketplace.Domain.Entities.ArtisanProfile", "ArtisanProfile")
+                        .WithMany("GalleryImages")
+                        .HasForeignKey("ArtisanProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ArtisanProfile");
+                });
+
+            modelBuilder.Entity("Marketplace.Domain.Entities.ArtisanSalesSettings", b =>
+                {
+                    b.HasOne("Marketplace.Domain.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Marketplace.Domain.Entities.Cart", b =>
                 {
                     b.HasOne("Marketplace.Domain.Entities.AppUser", "User")
@@ -1324,6 +1448,8 @@ namespace Marketplace.Infrastructure.Migrations
             modelBuilder.Entity("Marketplace.Domain.Entities.ArtisanProfile", b =>
                 {
                     b.Navigation("Conversations");
+
+                    b.Navigation("GalleryImages");
 
                     b.Navigation("WorkshopApplications");
                 });

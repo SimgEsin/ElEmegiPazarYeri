@@ -12,6 +12,10 @@ export async function addToCart(productId: string, quantity: number): Promise<st
   return response.data
 }
 
+export async function updateCartItemQuantity(itemId: string, quantity: number): Promise<void> {
+  await apiClient.put(`/carts/items/${itemId}`, { quantity })
+}
+
 export async function removeCartItem(itemId: string): Promise<void> {
   await apiClient.delete(`/carts/items/${itemId}`)
 }

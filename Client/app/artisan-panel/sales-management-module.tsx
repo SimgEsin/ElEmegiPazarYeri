@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { getMySalesSettings, upsertSalesSettings } from "@/lib/api/sales-settings"
 
 type SalesFormState = {
   taxNumber: string
@@ -40,6 +41,41 @@ export default function SalesManagementModule() {
   const [form, setForm] = useState<SalesFormState>(initialSalesState)
   const [errorMessage, setErrorMessage] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadSettings() {
+      try {
+        const settings = await getMySalesSettings()
+        if (isMounted && settings) {
+          setForm({
+            taxNumber: settings.taxNumber,
+            taxOffice: settings.taxOffice,
+            companyTitle: settings.companyTitle,
+            accountHolder: settings.accountHolder,
+            iban: settings.iban,
+            bankName: settings.bankName,
+            shippingCompanies: settings.shippingCompany,
+          })
+        }
+      } catch {
+        // henüz ayar yoksa boş formla devam et
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadSettings()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   function updateField<K extends keyof SalesFormState>(field: K, value: SalesFormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -47,7 +83,7 @@ export default function SalesManagementModule() {
     setSuccessMessage("")
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.taxNumber.trim() || !form.taxOffice.trim() || !form.companyTitle.trim()) {
       setErrorMessage("Vergi alanlarını eksiksiz doldurun.")
       return
@@ -68,8 +104,27 @@ export default function SalesManagementModule() {
       return
     }
 
-    updateField("iban", normalizeIban(form.iban))
-    setSuccessMessage("Satış yönetimi bilgileri kaydedildi.")
+    const normalizedIban = normalizeIban(form.iban)
+    setForm((prev) => ({ ...prev, iban: normalizedIban }))
+    setIsSaving(true)
+    setErrorMessage("")
+
+    try {
+      await upsertSalesSettings({
+        companyTitle: form.companyTitle.trim(),
+        taxNumber: form.taxNumber.trim(),
+        taxOffice: form.taxOffice.trim(),
+        accountHolder: form.accountHolder.trim(),
+        iban: normalizedIban,
+        bankName: form.bankName.trim(),
+        shippingCompany: form.shippingCompanies.trim(),
+      })
+      setSuccessMessage("Satış yönetimi bilgileri kaydedildi.")
+    } catch {
+      setErrorMessage("Kayıt sırasında bir hata oluştu. Lütfen tekrar deneyin.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -129,8 +184,8 @@ export default function SalesManagementModule() {
       {successMessage ? <p className="text-sm font-medium text-primary">{successMessage}</p> : null}
 
       <div className="flex justify-end">
-        <Button type="button" onClick={handleSave}>
-          Satış Bilgilerini Kaydet
+        <Button type="button" onClick={handleSave} disabled={isLoading || isSaving}>
+          {isSaving ? "Kaydediliyor..." : "Satış Bilgilerini Kaydet"}
         </Button>
       </div>
     </div>

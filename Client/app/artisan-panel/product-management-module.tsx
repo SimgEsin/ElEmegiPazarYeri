@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils"
 
 type ProductManagementModuleProps = {
   products: ArtisanProduct[]
-  onSaveProduct: (product: ArtisanProduct) => void
-  onDeleteProduct: (productId: string) => void
+  onSaveProduct: (product: ArtisanProduct) => Promise<void> | void
+  onDeleteProduct: (productId: string) => Promise<void> | void
 }
 
 type ImageAsset = {
@@ -142,6 +142,20 @@ function createImageAsset(file: File): ImageAsset {
   }
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
+    reader.onerror = () => reject(new Error("Görsel okunamadı."))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function materializeAsset(asset: ImageAsset): Promise<ProductImage> {
+  const url = asset.origin === "local" && asset.file ? await fileToDataUrl(asset.file) : asset.previewUrl
+  return { name: asset.name, previewUrl: url, alt: asset.alt }
+}
+
 function revokeBlobUrl(url: string) {
   if (url.startsWith("blob:")) {
     URL.revokeObjectURL(url)
@@ -160,39 +174,6 @@ function revokeLocalAssets(assets: ImageAsset[]) {
       revokeBlobUrl(asset.previewUrl)
     }
   })
-}
-
-function revokeRemovedSavedImages(previousProduct: ArtisanProduct, nextProduct: ArtisanProduct) {
-  const keptUrls = new Set([
-    nextProduct.heroImage?.previewUrl,
-    ...nextProduct.galleryImages.map((image) => image.previewUrl),
-    ...nextProduct.storyImages.map((image) => image.previewUrl),
-  ])
-
-  if (previousProduct.heroImage && !keptUrls.has(previousProduct.heroImage.previewUrl)) {
-    revokeBlobUrl(previousProduct.heroImage.previewUrl)
-  }
-
-  previousProduct.galleryImages.forEach((image) => {
-    if (!keptUrls.has(image.previewUrl)) {
-      revokeBlobUrl(image.previewUrl)
-    }
-  })
-
-  previousProduct.storyImages.forEach((image) => {
-    if (!keptUrls.has(image.previewUrl)) {
-      revokeBlobUrl(image.previewUrl)
-    }
-  })
-}
-
-function revokeProductImages(product: ArtisanProduct) {
-  if (product.heroImage) {
-    revokeBlobUrl(product.heroImage.previewUrl)
-  }
-
-  product.galleryImages.forEach((image) => revokeBlobUrl(image.previewUrl))
-  product.storyImages.forEach((image) => revokeBlobUrl(image.previewUrl))
 }
 
 function execStoryCommand(command: string, editor: HTMLDivElement | null) {
@@ -296,6 +277,7 @@ export default function ProductManagementModule({
   const [selectedCategory, setSelectedCategory] = useState("Tümü")
   const [errorMessage, setErrorMessage] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
   const heroImageRef = useRef<ImageAsset | null>(null)
   const galleryImagesRef = useRef<ImageAsset[]>([])
   const storyImagesRef = useRef<ImageAsset[]>([])
@@ -465,7 +447,7 @@ export default function ProductManagementModule({
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
     const trimmedName = form.name.trim()
     const trimmedCategory = form.category.trim()
     const trimmedSummary = form.summary.trim()
@@ -527,12 +509,36 @@ export default function ProductManagementModule({
     const existingProduct = products.find((product) => product.id === editingProductId)
     const slug = existingProduct?.slug ?? createSlug(trimmedName)
 
+    setIsSaving(true)
+
+    let materializedHero: ProductImage
+    let materializedGallery: ProductImage[]
+    let materializedStory: ProductImage[]
+
+    try {
+      materializedHero = await materializeAsset(form.heroImage)
+      materializedGallery = await Promise.all(form.galleryImages.map(materializeAsset))
+      materializedStory = await Promise.all(form.storyImages.map(materializeAsset))
+    } catch {
+      setIsSaving(false)
+      setErrorMessage("Görseller işlenirken bir hata oluştu. Lütfen tekrar deneyin.")
+      return
+    }
+
+    // Hikaye gövdesindeki blob önizleme adreslerini kalıcı data URL'leriyle değiştir.
+    let storyContentHtml = form.storyContent
+    form.storyImages.forEach((asset, index) => {
+      if (asset.origin === "local") {
+        storyContentHtml = storyContentHtml.split(asset.previewUrl).join(materializedStory[index].previewUrl)
+      }
+    })
+
     const nextProduct: ArtisanProduct = {
       id: existingProduct?.id ?? `product-${Date.now()}`,
       slug,
       pageHref: inferPageHref(slug, existingProduct),
-      artisanSlug: existingProduct?.artisanSlug ?? "zeynep-yilmaz",
-      artisanName: existingProduct?.artisanName ?? "Zeynep Yılmaz",
+      artisanSlug: existingProduct?.artisanSlug ?? "",
+      artisanName: existingProduct?.artisanName ?? "",
       name: trimmedName,
       category: trimmedCategory,
       price: parsedPrice,
@@ -541,12 +547,8 @@ export default function ProductManagementModule({
       salesMode: form.salesMode,
       summary: trimmedSummary,
       storyTitle: trimmedStoryTitle,
-      storyContent: form.storyContent,
-      storyImages: form.storyImages.map((image) => ({
-        name: image.name,
-        previewUrl: image.previewUrl,
-        alt: image.alt,
-      })),
+      storyContent: storyContentHtml,
+      storyImages: materializedStory,
       material: trimmedMaterial,
       technique: trimmedTechnique,
       productionDuration: trimmedProductionDuration,
@@ -556,33 +558,30 @@ export default function ProductManagementModule({
         width: trimmedWidth,
         weight: trimmedWeight,
       },
-      heroImage: {
-        name: form.heroImage.name,
-        previewUrl: form.heroImage.previewUrl,
-        alt: form.heroImage.alt,
-      },
-      galleryImages: form.galleryImages.map((image) => ({
-        name: image.name,
-        previewUrl: image.previewUrl,
-        alt: image.alt,
-      })),
+      heroImage: materializedHero,
+      galleryImages: materializedGallery,
       views: existingProduct?.views ?? 0,
       salesCount: existingProduct?.salesCount ?? 0,
       revenue: existingProduct?.revenue ?? 0,
     }
 
-    if (existingProduct) {
-      revokeRemovedSavedImages(existingProduct, nextProduct)
+    try {
+      await onSaveProduct(nextProduct)
+      revokeLocalAsset(form.heroImage)
+      revokeLocalAssets(form.galleryImages)
+      revokeLocalAssets(form.storyImages)
+      setEditingProductId(nextProduct.id)
+      setForm(createFormStateFromProduct(nextProduct))
+      setErrorMessage("")
+      setSuccessMessage(editingProductId ? "Ürün ve hikaye güncellendi." : "Yeni ürün ve hikaye eklendi.")
+    } catch {
+      setErrorMessage("Ürün kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.")
+    } finally {
+      setIsSaving(false)
     }
-
-    onSaveProduct(nextProduct)
-    setEditingProductId(nextProduct.id)
-    setForm(createFormStateFromProduct(nextProduct))
-    setErrorMessage("")
-    setSuccessMessage(editingProductId ? "Ürün ve hikaye güncellendi." : "Yeni ürün ve hikaye eklendi.")
   }
 
-  function handleDelete(product: ArtisanProduct) {
+  async function handleDelete(product: ArtisanProduct) {
     if (editingProductId === product.id) {
       revokeLocalAsset(form.heroImage)
       revokeLocalAssets(form.galleryImages)
@@ -591,10 +590,13 @@ export default function ProductManagementModule({
       setForm(initialFormState)
     }
 
-    revokeProductImages(product)
-    onDeleteProduct(product.id)
-    setSuccessMessage("Ürün ve ilişkili hikaye listeden kaldırıldı.")
-    setErrorMessage("")
+    try {
+      await onDeleteProduct(product.id)
+      setSuccessMessage("Ürün ve ilişkili hikaye listeden kaldırıldı.")
+      setErrorMessage("")
+    } catch {
+      setErrorMessage("Ürün silinirken bir hata oluştu. Lütfen tekrar deneyin.")
+    }
   }
 
   return (
@@ -933,11 +935,15 @@ export default function ProductManagementModule({
           {successMessage ? <p className="text-sm font-medium text-primary">{successMessage}</p> : null}
 
           <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" onClick={resetForm}>
+            <Button type="button" variant="outline" onClick={resetForm} disabled={isSaving}>
               Formu Temizle
             </Button>
-            <Button type="button" onClick={handleSave}>
-              {editingProductId ? "Değişiklikleri Kaydet" : "Ürünü Ekle"}
+            <Button type="button" onClick={handleSave} disabled={isSaving}>
+              {isSaving
+                ? "Kaydediliyor..."
+                : editingProductId
+                  ? "Değişiklikleri Kaydet"
+                  : "Ürünü Ekle"}
             </Button>
           </div>
         </CardContent>

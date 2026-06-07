@@ -8,6 +8,7 @@ public class ArtisanProfile : BaseEntity
     public string Craft { get; set; } = string.Empty;
     public string City { get; set; } = string.Empty;
     public string? Bio { get; set; }
+    public string? AvatarUrl { get; set; }
     public decimal RatingAvg { get; set; }
     public int FollowerCount { get; set; }
     public int ProductCount { get; set; }
@@ -16,4 +17,5 @@ public class ArtisanProfile : BaseEntity
     public AppUser? User { get; set; }
     public ICollection<WorkshopApplication> WorkshopApplications { get; set; } = new List<WorkshopApplication>();
     public ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
+    public ICollection<ArtisanProfileImage> GalleryImages { get; set; } = new List<ArtisanProfileImage>();
 }

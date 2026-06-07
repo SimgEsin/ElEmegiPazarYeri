@@ -311,6 +311,48 @@ public sealed class GetConversationMessagesQueryHandler : IRequestHandler<GetCon
     }
 }
 
+public sealed class GetMyAgreementsQueryHandler : IRequestHandler<GetMyAgreementsQuery, IReadOnlyList<AgreementDto>>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+
+    public GetMyAgreementsQueryHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+    }
+
+    public async Task<IReadOnlyList<AgreementDto>> Handle(GetMyAgreementsQuery request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            return Array.Empty<AgreementDto>();
+        }
+
+        return await _dbContext.Offers
+            .AsNoTracking()
+            .Where(offer => !offer.IsDeleted
+                && offer.Conversation != null
+                && !offer.Conversation.IsDeleted
+                && (offer.Conversation.BuyerId == userId || offer.Conversation.ArtisanId == userId))
+            .OrderByDescending(offer => offer.UpdatedAt ?? offer.CreatedAt)
+            .Select(offer => new AgreementDto
+            {
+                Id = offer.Id,
+                ConversationId = offer.ConversationId,
+                ProductId = offer.Conversation!.ProductId,
+                ProductName = offer.Conversation.Product != null ? offer.Conversation.Product.Name : string.Empty,
+                CounterpartyName = offer.Conversation.BuyerId == userId
+                    ? (offer.Conversation.ArtisanProfile != null ? offer.Conversation.ArtisanProfile.DisplayName : string.Empty)
+                    : (offer.Conversation.Buyer != null ? offer.Conversation.Buyer.FullName : string.Empty),
+                ProposedPrice = offer.ProposedPrice,
+                Status = offer.Status,
+                UpdatedAt = offer.UpdatedAt ?? offer.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+    }
+}
+
 public sealed class GetMyConversationsQueryHandler : IRequestHandler<GetMyConversationsQuery, IReadOnlyList<ConversationListDto>>
 {
     private readonly IMarketplaceDbContext _dbContext;
@@ -330,6 +372,7 @@ public sealed class GetMyConversationsQueryHandler : IRequestHandler<GetMyConver
             .AsNoTracking()
             .Include(entity => entity.Product)
                 .ThenInclude(product => product!.ProductImages)
+            .Include(entity => entity.Buyer)
             .Include(entity => entity.ArtisanProfile)
             .Include(entity => entity.Messages)
             .Include(entity => entity.Offers)
@@ -360,6 +403,7 @@ public sealed class GetMyConversationsQueryHandler : IRequestHandler<GetMyConver
                     .Select(image => image.Url)
                     .FirstOrDefault(),
                 BuyerId = conversation.BuyerId,
+                BuyerDisplayName = conversation.Buyer?.FullName ?? string.Empty,
                 ArtisanId = conversation.ArtisanId,
                 ArtisanProfileId = conversation.ArtisanProfileId,
                 ArtisanDisplayName = conversation.ArtisanProfile?.DisplayName ?? string.Empty,

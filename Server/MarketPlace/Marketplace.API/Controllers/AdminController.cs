@@ -25,4 +25,18 @@ public sealed class AdminController : ControllerBase
         var analytics = await _mediator.Send(new GetAdminAnalyticsQuery(), cancellationToken);
         return Ok(analytics);
     }
+
+    [HttpGet("orders")]
+    public async Task<IActionResult> GetOrders(CancellationToken cancellationToken)
+    {
+        var orders = await _mediator.Send(new GetAdminOrdersQuery(), cancellationToken);
+        return Ok(orders);
+    }
+
+    [HttpPost("orders/{id:guid}/cancel")]
+    public async Task<IActionResult> CancelOrder(Guid id, CancellationToken cancellationToken)
+    {
+        var cancelled = await _mediator.Send(new CancelOrderForAdminCommand(id), cancellationToken);
+        return cancelled ? NoContent() : NotFound();
+    }
 }

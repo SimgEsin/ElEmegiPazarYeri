@@ -22,6 +22,7 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, LoginRes
         var email = request.Email.Trim().ToLower();
 
         var user = await _dbContext.Users
+            .Include(user => user.UserRoles)
             .FirstOrDefaultAsync(user => user.Email.ToLower() == email, cancellationToken);
 
         if (user is null)

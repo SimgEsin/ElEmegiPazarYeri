@@ -1,7 +1,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Clock3, Hammer, Heart, House, Leaf, Share2, ShieldCheck, ShoppingBag, SquareLibrary, Star } from "lucide-react"
+import { Clock3, Hammer, House, Leaf, ShieldCheck, ShoppingBag, SquareLibrary, Star } from "lucide-react"
 
 import { ProductStoryTeaser } from "@/components/site/product-story-teaser"
 import { ExperienceShareModal } from "@/components/site/experience-share-modal"
@@ -9,6 +9,8 @@ import { ProductReportModal } from "@/components/site/product-report-modal"
 import { getProductBySlug, getProducts } from "@/lib/api/products"
 import { getProductReviews } from "@/lib/api/reviews"
 import { formatTry } from "@/lib/format"
+import { FavoriteShareButtons } from "@/app/products/[slug]/favorite-share-buttons"
+import { AddToCartButton } from "@/app/products/[slug]/add-to-cart-button"
 
 type ProductMode = "ready_stock" | "made_to_order"
 
@@ -144,22 +146,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                 </span>
               </div>
               <div className="h-10 w-px bg-primary/10" />
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  aria-label="Favorilere ekle"
-                  className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-white"
-                >
-                  <Heart className="size-5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Paylaş"
-                  className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-white"
-                >
-                  <Share2 className="size-5" />
-                </button>
-              </div>
+              <FavoriteShareButtons productId={product.id} productName={product.name} />
             </div>
 
             <div className="space-y-6">
@@ -196,13 +183,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                     {ctaLabelByMode[productMode]}
                   </Link>
                 ) : (
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/20 transition-colors hover:bg-primary/90"
-                  >
-                    <ShoppingBag className="size-5" />
-                    {ctaLabelByMode[productMode]}
-                  </button>
+                  <AddToCartButton productId={product.id} />
                 )}
                 <ProductReportModal productName={product.name} />
                 <p className="text-center text-[10px] tracking-widest text-muted-foreground uppercase">{deliveryText}</p>

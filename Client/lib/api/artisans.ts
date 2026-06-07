@@ -1,5 +1,5 @@
 import apiClient from "@/lib/axios"
-import type { ArtisanProfile } from "@/lib/api/types"
+import type { ArtisanProfile, ArtisanProfileDetails } from "@/lib/api/types"
 
 export async function getArtisanProfiles(options?: { signal?: AbortSignal }): Promise<ArtisanProfile[]> {
   const response = await apiClient.get<ArtisanProfile[]>("/artisanprofiles", { signal: options?.signal })
@@ -18,11 +18,18 @@ export async function getArtisanProfileBySlug(slug: string): Promise<ArtisanProf
   return response.status === 404 ? null : response.data
 }
 
-export async function getMyArtisanProfile(): Promise<ArtisanProfile | null> {
-  const response = await apiClient.get<ArtisanProfile>("/artisanprofiles/me", {
+export async function getMyArtisanProfile(): Promise<ArtisanProfileDetails | null> {
+  const response = await apiClient.get<ArtisanProfileDetails>("/artisanprofiles/me", {
     validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
   })
   return response.status === 404 ? null : response.data
+}
+
+export type ArtisanProfileImageInput = {
+  name: string
+  url: string
+  altText?: string
+  sortOrder?: number
 }
 
 export type ArtisanProfilePayload = {
@@ -31,10 +38,12 @@ export type ArtisanProfilePayload = {
   craft: string
   city: string
   bio?: string
+  avatarUrl?: string
   ratingAvg?: number
   followerCount?: number
   productCount?: number
   isVerified?: boolean
+  galleryImages?: ArtisanProfileImageInput[]
 }
 
 export async function createArtisanProfile(payload: ArtisanProfilePayload): Promise<string> {
@@ -46,4 +55,8 @@ export async function createArtisanProfile(payload: ArtisanProfilePayload): Prom
 export async function updateArtisanProfile(id: string, payload: ArtisanProfilePayload): Promise<void> {
   // PUT binds UpdateArtisanProfileDto directly.
   await apiClient.put(`/artisanprofiles/${id}`, payload)
+}
+
+export async function deleteArtisanProfile(id: string): Promise<void> {
+  await apiClient.delete(`/artisanprofiles/${id}`)
 }

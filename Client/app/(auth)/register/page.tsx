@@ -27,7 +27,7 @@ export default function RegisterPage() {
     const trimmedEmail = email.trim()
 
     if (!trimmedFullName || !trimmedEmail || password.length < 6) {
-      setErrorMessage("Lutfen tum alanlari kontrol edin. Sifre en az 6 karakter olmalidir.")
+      setErrorMessage("Lütfen tüm alanları kontrol edin. Şifre en az 6 karakter olmalıdır.")
       return
     }
 
@@ -41,7 +41,7 @@ export default function RegisterPage() {
       })
       router.push("/login")
     } catch {
-      setErrorMessage("Kayit olusturulamadi. Lutfen bilgilerinizi kontrol edip tekrar deneyin.")
+      setErrorMessage("Kayıt oluşturulamadı. Lütfen bilgilerinizi kontrol edip tekrar deneyin.")
     } finally {
       setIsSubmitting(false)
     }
@@ -55,8 +55,8 @@ export default function RegisterPage() {
             <UserRound className="size-5" />
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-2xl font-black tracking-tight">Kayit Ol</CardTitle>
-            <CardDescription>El emegi pazarina katilmak icin hesap bilgilerinizi olusturun.</CardDescription>
+            <CardTitle className="text-2xl font-black tracking-tight">Kayıt Ol</CardTitle>
+            <CardDescription>El emeği pazarına katılmak için hesap bilgilerinizi oluşturun.</CardDescription>
           </div>
         </CardHeader>
 
@@ -76,7 +76,7 @@ export default function RegisterPage() {
                   name="fullName"
                   value={fullName}
                   onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Adiniz Soyadiniz"
+                  placeholder="Adınız Soyadınız"
                   className="h-10 pl-9"
                   autoComplete="name"
                   disabled={isSubmitting}
@@ -104,7 +104,7 @@ export default function RegisterPage() {
             </label>
 
             <label className="space-y-2 text-sm font-semibold">
-              <span>Sifre</span>
+              <span>Şifre</span>
               <div className="relative">
                 <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -123,14 +123,14 @@ export default function RegisterPage() {
             </label>
 
             <Button type="submit" size="lg" className="h-10 w-full font-semibold" disabled={isSubmitting}>
-              {isSubmitting ? "Kayit olusturuluyor..." : "Kayit Ol"}
+              {isSubmitting ? "Kayıt oluşturuluyor..." : "Kayıt Ol"}
             </Button>
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            Zaten hesabiniz var mi?{" "}
+            Zaten hesabınız var mı?{" "}
             <Link href="/login" className="font-semibold text-primary hover:underline">
-              Giris Yap
+              Giriş Yap
             </Link>
           </p>
         </CardContent>
