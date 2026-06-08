@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 
-import AgreementsModule from "./agreements-module"
+import AgreementWorkspace, { type AgreementThread } from "./agreement-workspace"
 import AnalyticsModule from "./analytics-module"
 import MessagesModule from "./messages-module"
 import NotificationsModule from "./notifications-module"
@@ -30,6 +30,7 @@ import {
   getConversationMessages,
   getMyAgreements,
   getMyConversations,
+  makeOffer,
   sendMessage,
   type Agreement,
 } from "@/lib/api/conversations"
@@ -49,14 +50,14 @@ import type {
   Category,
   ConversationListItem,
   Notification,
+  OfferStatus,
   OrderStatus as ApiOrderStatus,
   ProductDetails,
   ProductStatus as ApiProductStatus,
   SalesMode as ApiSalesMode,
 } from "@/lib/api/types"
 import type { ArtisanOrder } from "./panel-types"
-import { formatPrice } from "@/lib/mock-data"
-import type { ConsensusItem, MessageThread, NotificationItem, ThreadMessage } from "@/lib/mock-data"
+import type { MessageThread, NotificationItem, ThreadMessage } from "@/lib/mock-data"
 import { cn } from "@/lib/utils"
 
 type PanelTab = "profile" | "sales" | "products" | "orders" | "analytics" | "notifications" | "messages" | "agreements"
@@ -218,23 +219,27 @@ function toNotificationItem(notification: Notification): NotificationItem {
   }
 }
 
-const agreementStatusLabels: Record<Agreement["status"], ConsensusItem["status"]> = {
-  Pending: "Onay Bekliyor",
-  Accepted: "Siparişe Dönüştü",
-  Rejected: "Reddedildi",
-}
+function latestOfferForConversation(
+  conversation: ConversationListItem,
+  agreements: Agreement[],
+): { id: string; proposedPrice: number; status: OfferStatus } | null {
+  const latest = agreements
+    .filter((agreement) => agreement.conversationId === conversation.id)
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
 
-function toConsensusItem(agreement: Agreement): ConsensusItem {
-  return {
-    id: agreement.id,
-    title: `${agreement.productName} / teklif`,
-    counterpartyName: agreement.counterpartyName,
-    productName: agreement.productName,
-    summary: `Teklif tutarı: ${formatPrice(agreement.proposedPrice)}`,
-    status: agreementStatusLabels[agreement.status],
-    updatedAt: agreement.updatedAt,
-    ctaLabel: agreementStatusLabels[agreement.status],
+  if (latest) {
+    return { id: latest.id, proposedPrice: latest.proposedPrice, status: latest.status }
   }
+
+  if (conversation.activeOffer) {
+    return {
+      id: conversation.activeOffer.id,
+      proposedPrice: conversation.activeOffer.proposedPrice,
+      status: conversation.activeOffer.status,
+    }
+  }
+
+  return null
 }
 
 function buildThread(conversation: ConversationListItem, messages: ThreadMessage[]): MessageThread {
@@ -268,10 +273,10 @@ export default function ArtisanPanelClient() {
 
   const [conversations, setConversations] = useState<ConversationListItem[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
+  const [selectedAgreementId, setSelectedAgreementId] = useState<string | null>(null)
   const [threadMessages, setThreadMessages] = useState<Record<string, ThreadMessage[]>>({})
 
   const [agreements, setAgreements] = useState<Agreement[]>([])
-  const [highlightedAgreementId, setHighlightedAgreementId] = useState<string | null>(null)
 
   const loadProducts = useCallback(async (artisanId: string) => {
     try {
@@ -298,7 +303,17 @@ export default function ArtisanPanelClient() {
     try {
       const data = await getMyConversations()
       setConversations(data)
-      setSelectedThreadId((current) => current ?? data[0]?.id ?? null)
+      setSelectedThreadId((current) => current ?? data.find((item) => item.type === "Message")?.id ?? null)
+      setSelectedAgreementId((current) => current ?? data.find((item) => item.type === "Agreement")?.id ?? null)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const loadAgreements = useCallback(async () => {
+    try {
+      const data = await getMyAgreements()
+      setAgreements(data)
     } catch {
       // ignore
     }
@@ -339,21 +354,10 @@ export default function ArtisanPanelClient() {
       }
     }
 
-    async function loadAgreements() {
-      try {
-        const data = await getMyAgreements()
-        if (isMounted) {
-          setAgreements(data)
-        }
-      } catch {
-        // ignore
-      }
-    }
-
     loadCatalogContext()
     loadNotifications()
-    loadAgreements()
     void (async () => {
+      await loadAgreements()
       await loadOrders()
       await loadConversations()
     })()
@@ -361,7 +365,7 @@ export default function ArtisanPanelClient() {
     return () => {
       isMounted = false
     }
-  }, [loadProducts, loadOrders, loadConversations])
+  }, [loadProducts, loadOrders, loadConversations, loadAgreements])
 
   const loadThreadMessages = useCallback(async (conversationId: string) => {
     try {
@@ -493,7 +497,13 @@ export default function ArtisanPanelClient() {
 
   function handleSelectThread(threadId: string) {
     setSelectedThreadId(threadId)
-    setHighlightedAgreementId(null)
+    if (!threadMessages[threadId]) {
+      loadThreadMessages(threadId)
+    }
+  }
+
+  function handleSelectAgreement(threadId: string) {
+    setSelectedAgreementId(threadId)
     if (!threadMessages[threadId]) {
       loadThreadMessages(threadId)
     }
@@ -507,8 +517,34 @@ export default function ArtisanPanelClient() {
     }
 
     try {
-      await sendMessage(conversation.productId, conversation.artisanProfileId, text)
+      await sendMessage(conversation.productId, conversation.artisanProfileId, text, "Message")
       await loadThreadMessages(threadId)
+      await loadConversations()
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleSendAgreementMessage(threadId: string, text: string) {
+    const conversation = conversations.find((item) => item.id === threadId)
+
+    if (!conversation || !conversation.artisanProfileId) {
+      return
+    }
+
+    try {
+      await sendMessage(conversation.productId, conversation.artisanProfileId, text, "Agreement")
+      await loadThreadMessages(threadId)
+      await loadConversations()
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleMakeOffer(threadId: string, price: number) {
+    try {
+      await makeOffer(threadId, price)
+      await loadAgreements()
       await loadConversations()
     } catch {
       // ignore
@@ -536,7 +572,6 @@ export default function ArtisanPanelClient() {
 
     if (targetModule === "messages") {
       setActiveTab("messages")
-      setHighlightedAgreementId(null)
       if (targetId) {
         handleSelectThread(targetId)
       }
@@ -545,7 +580,10 @@ export default function ArtisanPanelClient() {
 
     if (targetModule === "agreements") {
       setActiveTab("agreements")
-      setHighlightedAgreementId(targetId)
+      const conversationId = agreements.find((agreement) => agreement.id === targetId)?.conversationId ?? targetId
+      if (conversationId) {
+        handleSelectAgreement(conversationId)
+      }
       return
     }
 
@@ -554,11 +592,20 @@ export default function ArtisanPanelClient() {
     }
   }
 
-  const messageThreads = conversations.map((conversation) =>
-    buildThread(conversation, threadMessages[conversation.id] ?? []),
-  )
+  const messageThreads = conversations
+    .filter((conversation) => conversation.type === "Message")
+    .map((conversation) => buildThread(conversation, threadMessages[conversation.id] ?? []))
   const notificationItems = notifications.map(toNotificationItem)
-  const consensusItems = agreements.map(toConsensusItem)
+  const agreementThreads: AgreementThread[] = conversations
+    .filter((conversation) => conversation.type === "Agreement")
+    .map((conversation) => ({
+      id: conversation.id,
+      buyerName: conversation.buyerDisplayName || "Müşteri",
+      productName: conversation.productName || "Ürün",
+      offer: latestOfferForConversation(conversation, agreements),
+      updatedAt: conversation.lastMessageAt ?? new Date().toISOString(),
+      messages: threadMessages[conversation.id] ?? [],
+    }))
 
   return (
     <div className="space-y-6">
@@ -666,7 +713,13 @@ export default function ArtisanPanelClient() {
               />
             ) : null}
             {activeTab === "agreements" ? (
-              <AgreementsModule items={consensusItems} highlightedItemId={highlightedAgreementId} />
+              <AgreementWorkspace
+                threads={agreementThreads}
+                selectedId={selectedAgreementId}
+                onSelect={handleSelectAgreement}
+                onSendMessage={handleSendAgreementMessage}
+                onMakeOffer={handleMakeOffer}
+              />
             ) : null}
           </CardContent>
         </div>

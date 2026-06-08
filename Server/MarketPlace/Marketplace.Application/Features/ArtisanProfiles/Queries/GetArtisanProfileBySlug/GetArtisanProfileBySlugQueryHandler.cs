@@ -28,12 +28,27 @@ public sealed class GetArtisanProfileBySlugQueryHandler : IRequestHandler<GetArt
                 Craft = artisanProfile.Craft,
                 City = artisanProfile.City,
                 Bio = artisanProfile.Bio,
+                AvatarUrl = string.IsNullOrEmpty(artisanProfile.AvatarUrl)
+                    ? (artisanProfile.User != null ? artisanProfile.User.AvatarUrl : null)
+                    : artisanProfile.AvatarUrl,
                 RatingAvg = artisanProfile.RatingAvg,
                 FollowerCount = artisanProfile.FollowerCount,
                 ProductCount = artisanProfile.ProductCount,
                 IsVerified = artisanProfile.IsVerified,
                 CreatedAt = artisanProfile.CreatedAt,
-                UpdatedAt = artisanProfile.UpdatedAt
+                UpdatedAt = artisanProfile.UpdatedAt,
+                GalleryImages = artisanProfile.GalleryImages
+                    .Where(image => !image.IsDeleted)
+                    .OrderBy(image => image.SortOrder)
+                    .Select(image => new ArtisanProfileImageDto
+                    {
+                        Id = image.Id,
+                        Name = image.Name,
+                        Url = image.Url,
+                        AltText = image.AltText,
+                        SortOrder = image.SortOrder
+                    })
+                    .ToList()
             })
             .FirstOrDefaultAsync(cancellationToken);
     }

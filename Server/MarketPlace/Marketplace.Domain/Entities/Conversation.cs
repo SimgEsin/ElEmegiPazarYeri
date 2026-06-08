@@ -9,6 +9,7 @@ public class Conversation : BaseEntity
     public Guid ArtisanId { get; set; }
     public Guid? ArtisanProfileId { get; set; }
     public string Subject { get; set; } = string.Empty;
+    public ConversationType Type { get; set; } = ConversationType.Message;
     public ConversationStatus Status { get; set; } = ConversationStatus.Open;
     public int UnreadCountBuyer { get; set; }
     public int UnreadCountArtisan { get; set; }

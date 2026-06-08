@@ -54,6 +54,7 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
         var conversationsQuery = _dbContext.Conversations
             .Where(entity => entity.ProductId == dto.ProductId
                 && entity.ArtisanProfileId == dto.ArtisanProfileId
+                && entity.Type == dto.Type
                 && !entity.IsDeleted
                 && entity.Status == ConversationStatus.Open);
 
@@ -79,6 +80,7 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
                 ArtisanId = artisanProfile.UserId,
                 ArtisanProfileId = dto.ArtisanProfileId,
                 Subject = product.Name,
+                Type = dto.Type,
                 Status = ConversationStatus.Open
             };
 
@@ -407,6 +409,7 @@ public sealed class GetMyConversationsQueryHandler : IRequestHandler<GetMyConver
                 ArtisanId = conversation.ArtisanId,
                 ArtisanProfileId = conversation.ArtisanProfileId,
                 ArtisanDisplayName = conversation.ArtisanProfile?.DisplayName ?? string.Empty,
+                Type = conversation.Type,
                 LastMessage = lastMessage?.Content ?? lastMessage?.MessageText,
                 LastMessageAt = lastMessage?.SentAt ?? conversation.LastMessageAt,
                 ActiveOffer = activeOffer is null

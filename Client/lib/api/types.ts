@@ -15,6 +15,8 @@ export type OrderStatus =
 
 export type OfferStatus = "Pending" | "Accepted" | "Rejected"
 
+export type ConversationType = "Message" | "Agreement"
+
 export type ProductImageType = "Hero" | "Gallery" | "Story" | "OwnerGallery"
 
 export type ProductListItem = {
@@ -251,6 +253,7 @@ export type ConversationListItem = {
   artisanId: string
   artisanProfileId?: string | null
   artisanDisplayName: string
+  type: ConversationType
   lastMessage?: string | null
   lastMessageAt?: string | null
   activeOffer?: OfferSummary | null

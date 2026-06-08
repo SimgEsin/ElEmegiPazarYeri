@@ -36,7 +36,9 @@ public sealed class GetMyArtisanProfileQueryHandler : IRequestHandler<GetMyArtis
                 Craft = artisanProfile.Craft,
                 City = artisanProfile.City,
                 Bio = artisanProfile.Bio,
-                AvatarUrl = artisanProfile.AvatarUrl,
+                AvatarUrl = string.IsNullOrEmpty(artisanProfile.AvatarUrl)
+                    ? (artisanProfile.User != null ? artisanProfile.User.AvatarUrl : null)
+                    : artisanProfile.AvatarUrl,
                 RatingAvg = artisanProfile.RatingAvg,
                 FollowerCount = artisanProfile.FollowerCount,
                 ProductCount = artisanProfile.ProductCount,

@@ -11,8 +11,8 @@ export async function getArtisanProfileById(id: string): Promise<ArtisanProfile>
   return response.data
 }
 
-export async function getArtisanProfileBySlug(slug: string): Promise<ArtisanProfile | null> {
-  const response = await apiClient.get<ArtisanProfile>(`/artisanprofiles/slug/${slug}`, {
+export async function getArtisanProfileBySlug(slug: string): Promise<ArtisanProfileDetails | null> {
+  const response = await apiClient.get<ArtisanProfileDetails>(`/artisanprofiles/slug/${slug}`, {
     validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
   })
   return response.status === 404 ? null : response.data

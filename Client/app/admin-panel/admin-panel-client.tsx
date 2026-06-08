@@ -2,24 +2,53 @@
 
 import {
   ChartNoAxesCombined,
+  Flag,
   HeartHandshake,
   Package,
   PanelLeft,
   ReceiptText,
+  Sparkles,
   UsersRound,
 } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import AnalyticsModule from "./analytics-module"
 import ArtisanManagementModule from "./artisan-management-module"
 import CustomerExperienceManagementModule from "./customer-experience-management-module"
+import FeaturedStoryModule from "./featured-story-module"
+import ModerationModule from "./moderation-module"
 import OrderManagementModule from "./order-management-module"
-import ProductManagementModule from "./product-management-module"
+import ProductManagementModule, { type ProductEditValues } from "./product-management-module"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  cancelAdminOrder,
+  getAdminAnalytics,
+  getAdminOrders,
+  type AdminAnalytics,
+  type AdminOrder,
+} from "@/lib/api/admin"
+import { deleteArtisanProfile, getArtisanProfiles } from "@/lib/api/artisans"
+import { getCategories } from "@/lib/api/categories"
+import {
+  createProductPayloadFromDetails,
+  deleteProduct,
+  getProductById,
+  getProducts,
+  updateProduct,
+} from "@/lib/api/products"
+import { getProductReports, resolveProductReport, type ProductReport } from "@/lib/api/reports"
+import { getAllReviews } from "@/lib/api/reviews"
+import { getStoriesFeed, type StoryFeedItem } from "@/lib/api/stories"
+import type { ArtisanProfile, Category, ProductListItem, ProductReview } from "@/lib/api/types"
+import {
+  getWorkshopApplications,
+  updateWorkshopApplicationStatus,
+  type WorkshopApplication,
+} from "@/lib/api/workshop-applications"
 import { cn } from "@/lib/utils"
 
-type PanelTab = "products" | "orders" | "artisans" | "experience" | "analytics"
+type PanelTab = "products" | "stories" | "moderation" | "orders" | "artisans" | "experience" | "analytics"
 
 type PanelTabConfig = {
   id: PanelTab
@@ -34,6 +63,18 @@ const panelTabs: PanelTabConfig[] = [
     label: "Ürün Yönetimi",
     summary: "Koleksiyon kurgusu, stok ve vitrin seçkileri",
     icon: Package,
+  },
+  {
+    id: "stories",
+    label: "Haftanın Hikayesi",
+    summary: "Vitrine çıkarılacak hikayeyi seçin",
+    icon: Sparkles,
+  },
+  {
+    id: "moderation",
+    label: "Moderasyon Kuyruğu",
+    summary: "Kullanıcı raporlarını inceleyin ve kapatın",
+    icon: Flag,
   },
   {
     id: "orders",
@@ -61,23 +102,227 @@ const panelTabs: PanelTabConfig[] = [
   },
 ]
 
-function renderModule(activeTab: PanelTab) {
-  switch (activeTab) {
-    case "products":
-      return <ProductManagementModule />
-    case "orders":
-      return <OrderManagementModule />
-    case "artisans":
-      return <ArtisanManagementModule />
-    case "experience":
-      return <CustomerExperienceManagementModule />
-    case "analytics":
-      return <AnalyticsModule />
-  }
-}
-
 export default function AdminPanelClient() {
   const [activeTab, setActiveTab] = useState<PanelTab>("products")
+
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null)
+  const [products, setProducts] = useState<ProductListItem[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [stories, setStories] = useState<StoryFeedItem[]>([])
+  const [reports, setReports] = useState<ProductReport[]>([])
+  const [artisans, setArtisans] = useState<ArtisanProfile[]>([])
+  const [applications, setApplications] = useState<WorkshopApplication[]>([])
+  const [orders, setOrders] = useState<AdminOrder[]>([])
+  const [reviews, setReviews] = useState<ProductReview[]>([])
+
+  const loadProducts = useCallback(async () => {
+    try {
+      setProducts(await getProducts())
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const loadReports = useCallback(async () => {
+    try {
+      setReports(await getProductReports())
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const loadArtisans = useCallback(async () => {
+    try {
+      setArtisans(await getArtisanProfiles())
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const loadApplications = useCallback(async () => {
+    try {
+      setApplications(await getWorkshopApplications())
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const loadOrders = useCallback(async () => {
+    try {
+      setOrders(await getAdminOrders())
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      setAnalytics(await getAdminAnalytics())
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    async function bootstrap() {
+      await Promise.all([
+        loadAnalytics(),
+        loadProducts(),
+        loadReports(),
+        loadArtisans(),
+        loadApplications(),
+        loadOrders(),
+      ])
+
+      try {
+        setCategories(await getCategories())
+      } catch {
+        // ignore
+      }
+
+      try {
+        setStories(await getStoriesFeed())
+      } catch {
+        // ignore
+      }
+
+      try {
+        setReviews(await getAllReviews())
+      } catch {
+        // ignore
+      }
+    }
+
+    void bootstrap()
+  }, [loadAnalytics, loadProducts, loadReports, loadArtisans, loadApplications, loadOrders])
+
+  const handleSaveProduct = useCallback(
+    async (productId: string, values: ProductEditValues) => {
+      const details = await getProductById(productId)
+      const payload = createProductPayloadFromDetails(details, {
+        name: values.name,
+        categoryId: values.categoryId,
+        price: values.price,
+        status: values.status,
+        salesMode: values.salesMode,
+        summary: values.summary,
+        stock: values.stock,
+        isSoldOut: values.stock <= 0,
+      })
+      await updateProduct(productId, payload)
+      await loadProducts()
+      await loadAnalytics()
+    },
+    [loadProducts, loadAnalytics],
+  )
+
+  const handleDeleteProduct = useCallback(
+    async (productId: string) => {
+      try {
+        await deleteProduct(productId)
+        await loadProducts()
+        await loadAnalytics()
+      } catch {
+        // ignore
+      }
+    },
+    [loadProducts, loadAnalytics],
+  )
+
+  const handleResolveReport = useCallback(
+    async (report: ProductReport) => {
+      try {
+        await resolveProductReport(report)
+        await loadReports()
+      } catch {
+        // ignore
+      }
+    },
+    [loadReports],
+  )
+
+  const handleBanArtisan = useCallback(
+    async (artisanId: string) => {
+      try {
+        await deleteArtisanProfile(artisanId)
+        await loadArtisans()
+      } catch {
+        // ignore
+      }
+    },
+    [loadArtisans],
+  )
+
+  const handleApproveApplication = useCallback(
+    async (application: WorkshopApplication) => {
+      try {
+        await updateWorkshopApplicationStatus(application, "Approved")
+        await loadApplications()
+      } catch {
+        // ignore
+      }
+    },
+    [loadApplications],
+  )
+
+  const handleRejectApplication = useCallback(
+    async (application: WorkshopApplication) => {
+      try {
+        await updateWorkshopApplicationStatus(application, "Rejected")
+        await loadApplications()
+      } catch {
+        // ignore
+      }
+    },
+    [loadApplications],
+  )
+
+  const handleCancelOrder = useCallback(
+    async (orderId: string) => {
+      try {
+        await cancelAdminOrder(orderId)
+        await loadOrders()
+        await loadAnalytics()
+      } catch {
+        // ignore
+      }
+    },
+    [loadOrders, loadAnalytics],
+  )
+
+  function renderModule(tab: PanelTab) {
+    switch (tab) {
+      case "products":
+        return (
+          <ProductManagementModule
+            products={products}
+            categories={categories}
+            onSaveProduct={handleSaveProduct}
+            onDeleteProduct={handleDeleteProduct}
+          />
+        )
+      case "stories":
+        return <FeaturedStoryModule stories={stories} />
+      case "moderation":
+        return <ModerationModule reports={reports} products={products} onResolveReport={handleResolveReport} />
+      case "orders":
+        return <OrderManagementModule orders={orders} onCancelOrder={handleCancelOrder} />
+      case "artisans":
+        return (
+          <ArtisanManagementModule
+            artisans={artisans}
+            applications={applications}
+            onBanArtisan={handleBanArtisan}
+            onApproveApplication={handleApproveApplication}
+            onRejectApplication={handleRejectApplication}
+          />
+        )
+      case "experience":
+        return <CustomerExperienceManagementModule reviews={reviews} />
+      case "analytics":
+        return <AnalyticsModule analytics={analytics} />
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -88,7 +333,7 @@ export default function AdminPanelClient() {
         <div className="space-y-2">
           <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Admin Paneli</h1>
           <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-            Kürasyon, operasyon ve topluluk sinyallerini tek bakışta takip etmek için tasarlanmış statik yönetim alanı.
+            Kürasyon, operasyon ve topluluk sinyallerini tek bakışta takip etmek için tasarlanmış yönetim alanı.
           </p>
         </div>
       </header>

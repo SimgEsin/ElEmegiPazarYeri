@@ -7,6 +7,7 @@ public sealed class SendMessageDto
     public required Guid ProductId { get; init; }
     public required Guid ArtisanProfileId { get; init; }
     public required string Content { get; init; }
+    public ConversationType Type { get; init; } = ConversationType.Message;
 }
 
 public sealed class MakeOfferDto
@@ -32,6 +33,7 @@ public sealed class ConversationListDto
     public Guid ArtisanId { get; init; }
     public Guid? ArtisanProfileId { get; init; }
     public string ArtisanDisplayName { get; init; } = string.Empty;
+    public ConversationType Type { get; init; }
     public string? LastMessage { get; init; }
     public DateTime? LastMessageAt { get; init; }
     public OfferSummaryDto? ActiveOffer { get; init; }

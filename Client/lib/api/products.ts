@@ -59,6 +59,36 @@ export async function createProduct(payload: CreateProductPayload): Promise<stri
   return response.data
 }
 
+// Mevcut ürün detayından tam bir güncelleme payload'u kurar; verilen alanlar
+// override edilir. Hikaye/teknik gibi diğer alanlar korunur (UpdateProductDto
+// handler'ı tüm alanları DTO'dan yazdığı için eksik gönderim veriyi siler).
+export function createProductPayloadFromDetails(
+  details: ProductDetails,
+  overrides: Partial<CreateProductPayload> = {},
+): CreateProductPayload {
+  return {
+    name: details.name,
+    categoryId: details.categoryId,
+    price: details.price,
+    status: details.status,
+    salesMode: details.salesMode,
+    slug: details.slug,
+    summary: details.summary ?? undefined,
+    storyTitle: details.storyTitle ?? undefined,
+    storyContentHtml: details.storyContentHtml ?? undefined,
+    material: details.material ?? undefined,
+    technique: details.technique ?? undefined,
+    productionDurationText: details.productionDurationText ?? undefined,
+    deliveryInfoText: details.deliveryInfoText ?? undefined,
+    stock: details.stock,
+    heightText: details.heightText ?? undefined,
+    widthText: details.widthText ?? undefined,
+    weightText: details.weightText ?? undefined,
+    isSoldOut: details.isSoldOut,
+    ...overrides,
+  }
+}
+
 export async function updateProduct(id: string, payload: CreateProductPayload): Promise<void> {
   // PUT binds UpdateProductDto directly -> send flat.
   await apiClient.put(`/products/${id}`, payload)

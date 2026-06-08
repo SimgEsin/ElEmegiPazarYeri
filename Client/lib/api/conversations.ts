@@ -1,5 +1,5 @@
 import apiClient from "@/lib/axios"
-import type { ConversationListItem } from "@/lib/api/types"
+import type { ConversationListItem, ConversationType } from "@/lib/api/types"
 
 export type ConversationMessage = {
   id: string
@@ -39,10 +39,11 @@ export async function sendMessage(
   productId: string,
   artisanProfileId: string,
   content: string,
+  type: ConversationType = "Message",
 ): Promise<string> {
   // POST binds SendMessageCommand(SendMessageDto Message).
   const response = await apiClient.post<string>("/conversations/messages", {
-    message: { productId, artisanProfileId, content },
+    message: { productId, artisanProfileId, content, type },
   })
   return response.data
 }

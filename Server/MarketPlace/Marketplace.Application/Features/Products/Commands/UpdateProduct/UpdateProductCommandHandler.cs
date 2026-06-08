@@ -1,6 +1,5 @@
 using MediatR;
 using Marketplace.Application.Common.Interfaces;
-using Marketplace.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Marketplace.Application.Features.Products.Commands.UpdateProduct;
@@ -8,12 +7,10 @@ namespace Marketplace.Application.Features.Products.Commands.UpdateProduct;
 public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, bool>
 {
     private readonly IMarketplaceDbContext _dbContext;
-    private readonly ICurrentUserService _currentUserService;
 
-    public UpdateProductCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    public UpdateProductCommandHandler(IMarketplaceDbContext dbContext)
     {
         _dbContext = dbContext;
-        _currentUserService = currentUserService;
     }
 
     public async Task<bool> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
@@ -30,7 +27,6 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
 
         product.Name = dto.Name;
         product.CategoryId = dto.CategoryId;
-        product.ArtisanId = GetCurrentUserId();
         product.Price = dto.Price;
         product.Status = dto.Status;
         product.SalesMode = dto.SalesMode;
@@ -54,15 +50,5 @@ public sealed class UpdateProductCommandHandler : IRequestHandler<UpdateProductC
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
-    }
-
-    private Guid GetCurrentUserId()
-    {
-        if (Guid.TryParse(_currentUserService.UserId, out var userId))
-        {
-            return userId;
-        }
-
-        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
     }
 }

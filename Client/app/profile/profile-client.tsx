@@ -1273,9 +1273,9 @@ export default function ProfileClient() {
     setIsLoggedIn(false)
   }
 
-  const messageThreads = conversations.map((conversation) =>
-    buildThread(conversation, threadMessages[conversation.id] ?? []),
-  )
+  const messageThreads = conversations
+    .filter((conversation) => conversation.type === "Message")
+    .map((conversation) => buildThread(conversation, threadMessages[conversation.id] ?? []))
   const notificationItems = notifications.map(toNotificationItem)
   const consensusItems = agreements.map(toConsensusItem)
 

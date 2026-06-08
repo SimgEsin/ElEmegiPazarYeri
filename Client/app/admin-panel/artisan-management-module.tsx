@@ -1,43 +1,46 @@
-import { BadgeCheck, Ban, CheckCheck, Compass, Eye, UserPlus2, Wrench, X } from "lucide-react"
+"use client"
 
+import Link from "next/link"
+import { BadgeCheck, Ban, CheckCheck, Compass, Eye, ShieldCheck, UserPlus2, X } from "lucide-react"
+
+import type { ArtisanProfile } from "@/lib/api/types"
+import type { WorkshopApplication } from "@/lib/api/workshop-applications"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-const artisanStats = [
-  { label: "Aktif zanaatkar", value: "42", detail: "Platformda satış yapmaya yetkili hesaplar", icon: BadgeCheck },
-  { label: "Başvuru kuyruğu", value: "8", detail: "Onay veya red kararı bekleyen adaylar", icon: UserPlus2 },
-  { label: "Kısıtlı hesap", value: "6", detail: "Admin kararıyla yakın izlemeye alınmış kayıtlar", icon: Wrench },
-]
+type ArtisanManagementModuleProps = {
+  artisans: ArtisanProfile[]
+  applications: WorkshopApplication[]
+  onBanArtisan: (artisanId: string) => void
+  onApproveApplication: (application: WorkshopApplication) => void
+  onRejectApplication: (application: WorkshopApplication) => void
+}
 
-const artisanRoster = [
-  {
-    name: "Kum Çizgisi",
-    city: "İzmir",
-    focus: "Seramik ve sofra objeleri",
-    health: "Uyarı kaydı yok",
-  },
-  {
-    name: "Amber Cam Evi",
-    city: "Bursa",
-    focus: "Alevle şekillenen cam işler",
-    health: "Belge güncellemesi istendi",
-  },
-  {
-    name: "Narin Atölye",
-    city: "Balıkesir",
-    focus: "Doğal dokuma ve masa tekstili",
-    health: "Şikayet incelemesi kapatıldı",
-  },
-]
+function isPendingStatus(status: string) {
+  return status.toLocaleLowerCase("en-US") === "pending"
+}
 
-const onboardingQueue = [
-  { name: "Ladin Oyma", step: "Belge kontrolü", note: "Başvuru evrakları tamamlandı, son admin onayı bekleniyor." },
-  { name: "Mavi Fırın", step: "Portfolyo inceleme", note: "Ürün kalite standardı için ek görsel istendi." },
-  { name: "Sarnıç Bakır", step: "Sözleşme kontrolü", note: "Platform kurallarına uyum maddeleri yeniden değerlendiriliyor." },
-]
+export default function ArtisanManagementModule({
+  artisans,
+  applications,
+  onBanArtisan,
+  onApproveApplication,
+  onRejectApplication,
+}: ArtisanManagementModuleProps) {
+  const pendingApplications = applications.filter((application) => isPendingStatus(application.status))
+  const verifiedCount = artisans.filter((artisan) => artisan.isVerified).length
 
-export default function ArtisanManagementModule() {
+  const artisanStats = [
+    { label: "Aktif zanaatkar", value: artisans.length, detail: "Platformda kayıtlı zanaatkar hesapları", icon: BadgeCheck },
+    { label: "Başvuru kuyruğu", value: pendingApplications.length, detail: "Onay veya red kararı bekleyen başvurular", icon: UserPlus2 },
+    { label: "Doğrulanmış hesap", value: verifiedCount, detail: "Doğrulama rozeti verilmiş zanaatkarlar", icon: ShieldCheck },
+  ]
+
+  function artisanNameForProfile(artisanProfileId: string) {
+    return artisans.find((artisan) => artisan.id === artisanProfileId)?.displayName ?? "Başvuru sahibi"
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid gap-4 xl:grid-cols-3">
@@ -75,31 +78,39 @@ export default function ArtisanManagementModule() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {artisanRoster.map((artisan) => (
-              <div key={artisan.name} className="rounded-2xl border border-primary/10 bg-muted/20 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">{artisan.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {artisan.city} • {artisan.focus}
-                    </p>
+            {artisans.length > 0 ? (
+              artisans.map((artisan) => (
+                <div key={artisan.id} className="rounded-2xl border border-primary/10 bg-muted/20 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">{artisan.displayName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {artisan.city} • {artisan.craft}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="border-primary/15 bg-background/80">
+                      {artisan.isVerified ? "Doğrulanmış" : "Doğrulanmamış"}
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="border-primary/15 bg-background/80">
-                    {artisan.health}
-                  </Badge>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button asChild type="button" variant="outline" size="sm">
+                      <Link href={`/artisans/${artisan.slug}`}>
+                        <Eye className="size-4" />
+                        Zanaatkarı Görüntüle
+                      </Link>
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onBanArtisan(artisan.id)}>
+                      <Ban className="size-4" />
+                      Zanaatkarı Yasakla
+                    </Button>
+                  </div>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" size="sm">
-                    <Eye className="size-4" />
-                    Zanaatkarı Görüntüle
-                  </Button>
-                  <Button type="button" variant="outline" size="sm">
-                    <Ban className="size-4" />
-                    Zanaatkarı Yasakla
-                  </Button>
-                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-primary/15 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+                Kayıtlı zanaatkar hesabı bulunamadı.
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
 
@@ -111,32 +122,38 @@ export default function ArtisanManagementModule() {
               </span>
               <div>
                 <CardTitle>Başvuru Kuyruğu</CardTitle>
-                <CardDescription>Zanaatkarlık talepleri için admin onay ve red alanı.</CardDescription>
+                <CardDescription>Zanaatkarlık/atölye talepleri için admin onay ve red alanı.</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {onboardingQueue.map((item) => (
-              <div key={item.name} className="rounded-2xl border border-primary/10 bg-background/80 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold">{item.name}</p>
-                  <Badge variant="outline" className="border-primary/15 bg-primary/5 text-primary">
-                    {item.step}
-                  </Badge>
+            {pendingApplications.length > 0 ? (
+              pendingApplications.map((application) => (
+                <div key={application.id} className="rounded-2xl border border-primary/10 bg-background/80 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">{artisanNameForProfile(application.artisanProfileId)}</p>
+                    <Badge variant="outline" className="border-primary/15 bg-primary/5 text-primary">
+                      Beklemede
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">{application.message}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button type="button" size="sm" onClick={() => onApproveApplication(application)}>
+                      <CheckCheck className="size-4" />
+                      Onayla
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onRejectApplication(application)}>
+                      <X className="size-4" />
+                      Reddet
+                    </Button>
+                  </div>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground">{item.note}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button type="button" size="sm">
-                    <CheckCheck className="size-4" />
-                    Onayla
-                  </Button>
-                  <Button type="button" variant="outline" size="sm">
-                    <X className="size-4" />
-                    Reddet
-                  </Button>
-                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-primary/15 bg-background/60 p-4 text-sm text-muted-foreground">
+                Bekleyen başvuru yok.
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       </div>
