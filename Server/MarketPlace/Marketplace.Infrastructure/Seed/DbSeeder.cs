@@ -73,7 +73,7 @@ public static class DbSeeder
 
         if (artisan.ArtisanProfile is null)
         {
-            artisan.ArtisanProfile = new ArtisanProfile
+            var artisanProfile = new ArtisanProfile
             {
                 UserId = artisan.Id,
                 Slug = "mehmet-usta",
@@ -87,6 +87,8 @@ public static class DbSeeder
                 ProductCount = 1,
                 IsVerified = true,
             };
+
+            await dbContext.ArtisanProfiles.AddAsync(artisanProfile, cancellationToken);
         }
 
         var hasSalesSettings = await dbContext.ArtisanSalesSettings
