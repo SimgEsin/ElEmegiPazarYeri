@@ -38,6 +38,41 @@ public sealed class ConversationsController : ControllerBase
         return updated ? NoContent() : NotFound();
     }
 
+    [HttpPut("offers/{id:guid}/final-product")]
+    public async Task<IActionResult> SubmitFinalProduct(Guid id, [FromBody] SubmitFinalProductDto finalProduct, CancellationToken cancellationToken)
+    {
+        var updated = await _mediator.Send(new SubmitFinalProductCommand(id, finalProduct), cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
+    [HttpPut("offers/{id:guid}/approve-final")]
+    public async Task<IActionResult> ApproveFinalProduct(Guid id, CancellationToken cancellationToken)
+    {
+        var updated = await _mediator.Send(new ApproveFinalProductCommand(id), cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
+    [HttpPut("offers/{id:guid}/request-revision")]
+    public async Task<IActionResult> RequestRevision(Guid id, CancellationToken cancellationToken)
+    {
+        var updated = await _mediator.Send(new RequestRevisionCommand(id), cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
+    [HttpPut("offers/{id:guid}/ship")]
+    public async Task<IActionResult> MarkShipped(Guid id, [FromBody] MarkShippedDto shipping, CancellationToken cancellationToken)
+    {
+        var updated = await _mediator.Send(new MarkShippedCommand(id, shipping), cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
+    [HttpPut("offers/{id:guid}/deliver")]
+    public async Task<IActionResult> MarkDelivered(Guid id, CancellationToken cancellationToken)
+    {
+        var updated = await _mediator.Send(new MarkDeliveredCommand(id), cancellationToken);
+        return updated ? NoContent() : NotFound();
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetMyConversations(CancellationToken cancellationToken)
     {

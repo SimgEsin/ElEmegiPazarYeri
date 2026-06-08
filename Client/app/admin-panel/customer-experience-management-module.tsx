@@ -1,12 +1,19 @@
+import { Trash2 } from "lucide-react"
+
 import type { ProductReview } from "@/lib/api/types"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 type CustomerExperienceManagementModuleProps = {
   reviews: ProductReview[]
+  onDeleteReview: (reviewId: string) => void
 }
 
-export default function CustomerExperienceManagementModule({ reviews }: CustomerExperienceManagementModuleProps) {
+export default function CustomerExperienceManagementModule({
+  reviews,
+  onDeleteReview,
+}: CustomerExperienceManagementModuleProps) {
   return (
     <Card className="border-primary/10 bg-background/85">
       <CardHeader>
@@ -24,9 +31,21 @@ export default function CustomerExperienceManagementModule({ reviews }: Customer
                     <p className="text-xs text-muted-foreground">Doğrulanmış alıcı</p>
                   ) : null}
                 </div>
-                <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-primary">
-                  {review.rating}/5
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-primary">
+                    {review.rating}/5
+                  </Badge>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => onDeleteReview(review.id)}
+                  >
+                    <Trash2 className="size-4" />
+                    Sil
+                  </Button>
+                </div>
               </div>
               {review.comment ? (
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">{review.comment}</p>

@@ -3,24 +3,40 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, CheckCircle2, Hammer, MessageCircle, SendHorizonal, UserRound, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Hammer, MessageCircle, PackageCheck, SendHorizonal, Truck, UserRound, XCircle } from "lucide-react"
 
 import { useAuth } from "@/components/providers/auth-provider"
 import { getArtisanProfileBySlug } from "@/lib/api/artisans"
 import { getProductBySlug } from "@/lib/api/products"
 import {
+  approveFinalProduct,
   getConversationMessages,
   getMyAgreements,
   getMyConversations,
   makeOffer,
+  markDelivered,
+  markShipped,
+  requestRevision,
   respondToOffer,
   sendMessage,
+  submitFinalProduct,
   type ConversationMessage,
 } from "@/lib/api/conversations"
 import { formatTry } from "@/lib/format"
-import type { OfferStatus, ProductDetails } from "@/lib/api/types"
+import { stageLabel } from "@/lib/agreement-stage"
+import type { AgreementStage, OfferStatus, ProductDetails } from "@/lib/api/types"
 
-type OfferView = { id: string; proposedPrice: number; status: OfferStatus } | null
+type OfferView = {
+  id: string
+  proposedPrice: number
+  estimatedDeliveryDays: number
+  productDetails: string
+  status: OfferStatus
+  stage: AgreementStage
+  finalProductNote?: string | null
+  finalProductImageUrl?: string | null
+  shippingTrackingInfo?: string | null
+} | null
 
 type ConversationOption = { id: string; label: string }
 
@@ -47,6 +63,11 @@ export default function MutabakatClient({ slug }: { slug: string }) {
 
   const [draft, setDraft] = useState("")
   const [offerPrice, setOfferPrice] = useState("")
+  const [offerDeliveryDays, setOfferDeliveryDays] = useState("")
+  const [offerDetails, setOfferDetails] = useState("")
+  const [finalNote, setFinalNote] = useState("")
+  const [finalImageUrl, setFinalImageUrl] = useState("")
+  const [trackingInfo, setTrackingInfo] = useState("")
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -93,12 +114,28 @@ export default function MutabakatClient({ slug }: { slug: string }) {
         .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
 
       if (latestOffer) {
-        setOffer({ id: latestOffer.id, proposedPrice: latestOffer.proposedPrice, status: latestOffer.status })
+        setOffer({
+          id: latestOffer.id,
+          proposedPrice: latestOffer.proposedPrice,
+          estimatedDeliveryDays: latestOffer.estimatedDeliveryDays,
+          productDetails: latestOffer.productDetails,
+          status: latestOffer.status,
+          stage: latestOffer.stage,
+          finalProductNote: latestOffer.finalProductNote,
+          finalProductImageUrl: latestOffer.finalProductImageUrl,
+          shippingTrackingInfo: latestOffer.shippingTrackingInfo,
+        })
       } else if (chosen?.activeOffer) {
         setOffer({
           id: chosen.activeOffer.id,
           proposedPrice: chosen.activeOffer.proposedPrice,
+          estimatedDeliveryDays: chosen.activeOffer.estimatedDeliveryDays,
+          productDetails: chosen.activeOffer.productDetails,
           status: chosen.activeOffer.status,
+          stage: chosen.activeOffer.stage,
+          finalProductNote: chosen.activeOffer.finalProductNote,
+          finalProductImageUrl: chosen.activeOffer.finalProductImageUrl,
+          shippingTrackingInfo: chosen.activeOffer.shippingTrackingInfo,
         })
       } else {
         setOffer(null)
@@ -231,17 +268,93 @@ export default function MutabakatClient({ slug }: { slug: string }) {
       return
     }
 
+    const parsedDays = Number.parseInt(offerDeliveryDays.replace(/[^\d]/g, ""), 10)
+    if (!parsedDays || parsedDays <= 0) {
+      setActionError("Geçerli bir teslim süresi (gün) girin.")
+      return
+    }
+
+    const details = offerDetails.trim()
+    if (!details) {
+      setActionError("Ürün detaylarını girin.")
+      return
+    }
+
     setBusy(true)
     setActionError(null)
     try {
-      await makeOffer(conversationId, parsedPrice)
+      await makeOffer(conversationId, parsedPrice, parsedDays, details)
       setOfferPrice("")
+      setOfferDeliveryDays("")
+      setOfferDetails("")
       await loadConversationState(product.id, artisanProfileId, viewerIsArtisan, conversationId)
     } catch {
       setActionError("Teklif oluşturulamadı. Lütfen tekrar deneyin.")
     } finally {
       setBusy(false)
     }
+  }
+
+  const refreshState = async () => {
+    if (product) {
+      await loadConversationState(product.id, artisanProfileId, viewerIsArtisan, conversationId)
+    }
+  }
+
+  const runStageAction = async (action: () => Promise<void>, errorMessage: string) => {
+    setBusy(true)
+    setActionError(null)
+    try {
+      await action()
+      await refreshState()
+    } catch {
+      setActionError(errorMessage)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSubmitFinalProduct = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!offer) {
+      return
+    }
+    const note = finalNote.trim()
+    if (!note) {
+      setActionError("Ürünün son hâli için açıklama girin.")
+      return
+    }
+    const image = finalImageUrl.trim()
+    await runStageAction(async () => {
+      await submitFinalProduct(offer.id, note, image || undefined)
+      setFinalNote("")
+      setFinalImageUrl("")
+    }, "Son hâl gönderilemedi. Lütfen tekrar deneyin.")
+  }
+
+  const handleApproveFinal = async () => {
+    if (!offer) return
+    await runStageAction(() => approveFinalProduct(offer.id), "Onaylanamadı. Lütfen tekrar deneyin.")
+  }
+
+  const handleRequestRevision = async () => {
+    if (!offer) return
+    await runStageAction(() => requestRevision(offer.id), "Revizyon isteği gönderilemedi. Lütfen tekrar deneyin.")
+  }
+
+  const handleMarkShipped = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!offer) return
+    const tracking = trackingInfo.trim()
+    await runStageAction(async () => {
+      await markShipped(offer.id, tracking || undefined)
+      setTrackingInfo("")
+    }, "Kargo bilgisi kaydedilemedi. Lütfen tekrar deneyin.")
+  }
+
+  const handleMarkDelivered = async () => {
+    if (!offer) return
+    await runStageAction(() => markDelivered(offer.id), "Teslim onayı kaydedilemedi. Lütfen tekrar deneyin.")
   }
 
   if (loading) {
@@ -411,6 +524,169 @@ export default function MutabakatClient({ slug }: { slug: string }) {
                   )}
                 </div>
                 <p className="text-2xl font-black text-foreground">{formatTry(offer.proposedPrice)}</p>
+                <div className="flex items-center justify-between gap-3 border-t border-primary/10 pt-3 text-xs">
+                  <span className="font-semibold text-foreground">Teslim süresi</span>
+                  <span className="text-muted-foreground">{offer.estimatedDeliveryDays} gün içinde tamamlanıp kargolanır</span>
+                </div>
+                {offer.productDetails ? (
+                  <div className="space-y-1 border-t border-primary/10 pt-3">
+                    <span className="text-xs font-semibold text-foreground">Ürün detayları</span>
+                    <p className="whitespace-pre-line text-xs text-muted-foreground">{offer.productDetails}</p>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {offer?.status === "Accepted" ? (
+              <section className="space-y-3 rounded-lg border border-primary/10 bg-white p-4 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="flex items-center gap-2 font-bold">
+                    <Truck className="size-4 text-primary" />
+                    Üretim ve Teslimat
+                  </h3>
+                  <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+                    {stageLabel(offer.stage)}
+                  </span>
+                </div>
+
+                {offer.stage === "AwaitingApproval" || offer.stage === "Approved" || offer.stage === "Shipped" || offer.stage === "Delivered" ? (
+                  <div className="space-y-2 rounded-md border border-primary/10 bg-primary/5 p-3">
+                    <span className="text-xs font-semibold text-foreground">Satıcının paylaştığı son hâl</span>
+                    {offer.finalProductImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={offer.finalProductImageUrl}
+                        alt="Ürünün son hâli"
+                        className="max-h-56 w-full rounded-md object-cover"
+                      />
+                    ) : null}
+                    {offer.finalProductNote ? (
+                      <p className="whitespace-pre-line text-xs text-muted-foreground">{offer.finalProductNote}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {offer.shippingTrackingInfo && (offer.stage === "Shipped" || offer.stage === "Delivered") ? (
+                  <p className="rounded-md bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Kargo bilgisi: </span>
+                    {offer.shippingTrackingInfo}
+                  </p>
+                ) : null}
+
+                {!viewerIsArtisan ? (
+                  <>
+                    {offer.stage === "InProduction" ? (
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Satıcı ürününüzü hazırlıyor. Hazır olduğunda son hâlini onayınıza sunacak.
+                      </p>
+                    ) : null}
+                    {offer.stage === "AwaitingApproval" ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-amber-700">
+                          Ürünün son hâlini inceleyin. Onaylarsanız satıcı kargoya verecek.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleApproveFinal}
+                          disabled={busy}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+                        >
+                          <CheckCircle2 className="size-4" />
+                          Son Hâli Onayla
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRequestRevision}
+                          disabled={busy}
+                          className="flex w-full items-center justify-center rounded-lg border border-primary/20 bg-white py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                        >
+                          Revizyon İste
+                        </button>
+                      </div>
+                    ) : null}
+                    {offer.stage === "Approved" ? (
+                      <p className="text-xs font-semibold text-green-700">
+                        Son hâli onayladınız. Satıcı en kısa sürede kargoya verecek.
+                      </p>
+                    ) : null}
+                    {offer.stage === "Shipped" ? (
+                      <button
+                        type="button"
+                        onClick={handleMarkDelivered}
+                        disabled={busy}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+                      >
+                        <PackageCheck className="size-4" />
+                        Teslim Aldım
+                      </button>
+                    ) : null}
+                    {offer.stage === "Delivered" ? (
+                      <p className="text-xs font-semibold text-green-700">Sipariş teslim edildi. Mutabakat tamamlandı.</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {offer.stage === "InProduction" ? (
+                      <form onSubmit={handleSubmitFinalProduct} className="space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          Ürün hazır olduğunda son hâlini alıcının onayına gönderin.
+                        </p>
+                        <input
+                          value={finalImageUrl}
+                          onChange={(event) => setFinalImageUrl(event.target.value)}
+                          placeholder="Ürünün son hâli görsel bağlantısı (opsiyonel)"
+                          className="h-10 w-full rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                        />
+                        <textarea
+                          value={finalNote}
+                          onChange={(event) => setFinalNote(event.target.value)}
+                          placeholder="Ürünün son hâli hakkında açıklama (yapılan iş, malzeme, ölçü vb.)"
+                          rows={3}
+                          className="w-full rounded-lg border border-primary/20 px-3 py-2 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                        />
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className="flex w-full items-center justify-center rounded-lg bg-primary py-2.5 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+                        >
+                          Son Hâli Gönder
+                        </button>
+                      </form>
+                    ) : null}
+                    {offer.stage === "AwaitingApproval" ? (
+                      <p className="text-xs font-semibold text-amber-700">
+                        Ürünün son hâlini gönderdiniz. Alıcının onayını bekleyin.
+                      </p>
+                    ) : null}
+                    {offer.stage === "Approved" ? (
+                      <form onSubmit={handleMarkShipped} className="space-y-2">
+                        <p className="text-xs font-semibold text-green-700">Alıcı onayladı. Ürünü kargoya verin.</p>
+                        <input
+                          value={trackingInfo}
+                          onChange={(event) => setTrackingInfo(event.target.value)}
+                          placeholder="Kargo firması / takip no (opsiyonel)"
+                          className="h-10 w-full rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                        />
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+                        >
+                          <Truck className="size-4" />
+                          Kargoya Verdim
+                        </button>
+                      </form>
+                    ) : null}
+                    {offer.stage === "Shipped" ? (
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Kargoya verdiniz. Alıcının teslim onayını bekleyin.
+                      </p>
+                    ) : null}
+                    {offer.stage === "Delivered" ? (
+                      <p className="text-xs font-semibold text-green-700">Sipariş teslim edildi. Mutabakat tamamlandı.</p>
+                    ) : null}
+                  </>
+                )}
               </section>
             ) : null}
 
@@ -443,12 +719,6 @@ export default function MutabakatClient({ slug }: { slug: string }) {
                   </div>
                 ) : null}
 
-                {offer?.status === "Accepted" ? (
-                  <p className="text-xs font-semibold text-green-700">
-                    Teklifi onayladınız. Satıcı üretim ve teslimat sürecini başlatacak.
-                  </p>
-                ) : null}
-
                 {offer?.status === "Rejected" ? (
                   <p className="text-xs font-semibold text-amber-700">Teklifi reddettiniz. Satıcı yeni bir teklif paylaşabilir.</p>
                 ) : null}
@@ -461,7 +731,7 @@ export default function MutabakatClient({ slug }: { slug: string }) {
                   </p>
                 ) : hasPendingOffer ? (
                   <p className="text-xs font-semibold text-amber-700">Teklif gönderildi. Alıcının yanıtını bekleyin.</p>
-                ) : (
+                ) : offer?.status === "Accepted" ? null : (
                   <form onSubmit={handleMakeOffer} className="space-y-3 rounded-xl border border-primary/10 bg-white p-4">
                     <h3 className="text-sm font-bold">{offer ? "Yeni Teklif Oluştur" : "Resmi Teklif Oluştur"}</h3>
                     <div className="space-y-2">
@@ -477,6 +747,33 @@ export default function MutabakatClient({ slug }: { slug: string }) {
                         className="h-10 w-full rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <label htmlFor="offer-delivery" className="text-xs font-semibold text-foreground">
+                        Teslim süresi (gün)
+                      </label>
+                      <input
+                        id="offer-delivery"
+                        inputMode="numeric"
+                        value={offerDeliveryDays}
+                        onChange={(event) => setOfferDeliveryDays(event.target.value)}
+                        placeholder="Örn. 14"
+                        className="h-10 w-full rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Ürünün tamamlanıp kargoya verilmesine kadar geçecek süre.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="offer-details" className="text-xs font-semibold text-foreground">
+                        Ürün detayları
+                      </label>
+                      <textarea
+                        id="offer-details"
+                        value={offerDetails}
+                        onChange={(event) => setOfferDetails(event.target.value)}
+                        placeholder="Malzeme, ölçü, renk, kişiselleştirme gibi kesin detayları yazın."
+                        rows={4}
+                        className="w-full rounded-lg border border-primary/20 px-3 py-2 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                      />
+                    </div>
                     <button
                       type="submit"
                       disabled={busy}
@@ -486,10 +783,6 @@ export default function MutabakatClient({ slug }: { slug: string }) {
                     </button>
                   </form>
                 )}
-
-                {offer?.status === "Accepted" ? (
-                  <p className="text-xs font-semibold text-green-700">Alıcı teklifi onayladı. Mutabakat sağlandı.</p>
-                ) : null}
               </>
             )}
           </aside>

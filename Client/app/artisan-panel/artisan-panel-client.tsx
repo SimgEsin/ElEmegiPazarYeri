@@ -31,7 +31,9 @@ import {
   getMyAgreements,
   getMyConversations,
   makeOffer,
+  markShipped,
   sendMessage,
+  submitFinalProduct,
   type Agreement,
 } from "@/lib/api/conversations"
 import { createProductImage, deleteProductImage, getProductImages } from "@/lib/api/images"
@@ -50,7 +52,6 @@ import type {
   Category,
   ConversationListItem,
   Notification,
-  OfferStatus,
   OrderStatus as ApiOrderStatus,
   ProductDetails,
   ProductStatus as ApiProductStatus,
@@ -222,20 +223,36 @@ function toNotificationItem(notification: Notification): NotificationItem {
 function latestOfferForConversation(
   conversation: ConversationListItem,
   agreements: Agreement[],
-): { id: string; proposedPrice: number; status: OfferStatus } | null {
+): AgreementThread["offer"] {
   const latest = agreements
     .filter((agreement) => agreement.conversationId === conversation.id)
     .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0]
 
   if (latest) {
-    return { id: latest.id, proposedPrice: latest.proposedPrice, status: latest.status }
+    return {
+      id: latest.id,
+      proposedPrice: latest.proposedPrice,
+      estimatedDeliveryDays: latest.estimatedDeliveryDays,
+      productDetails: latest.productDetails,
+      status: latest.status,
+      stage: latest.stage,
+      finalProductNote: latest.finalProductNote,
+      finalProductImageUrl: latest.finalProductImageUrl,
+      shippingTrackingInfo: latest.shippingTrackingInfo,
+    }
   }
 
   if (conversation.activeOffer) {
     return {
       id: conversation.activeOffer.id,
       proposedPrice: conversation.activeOffer.proposedPrice,
+      estimatedDeliveryDays: conversation.activeOffer.estimatedDeliveryDays,
+      productDetails: conversation.activeOffer.productDetails,
       status: conversation.activeOffer.status,
+      stage: conversation.activeOffer.stage,
+      finalProductNote: conversation.activeOffer.finalProductNote,
+      finalProductImageUrl: conversation.activeOffer.finalProductImageUrl,
+      shippingTrackingInfo: conversation.activeOffer.shippingTrackingInfo,
     }
   }
 
@@ -393,6 +410,36 @@ export default function ArtisanPanelClient() {
     })()
   }, [selectedThreadId, threadMessages, loadThreadMessages])
 
+  useEffect(() => {
+    if (!selectedAgreementId || threadMessages[selectedAgreementId]) {
+      return
+    }
+
+    const conversationId = selectedAgreementId
+    void (async () => {
+      await loadThreadMessages(conversationId)
+    })()
+  }, [selectedAgreementId, threadMessages, loadThreadMessages])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void (async () => {
+        await loadConversations()
+        await loadAgreements()
+        if (selectedAgreementId) {
+          await loadThreadMessages(selectedAgreementId)
+        }
+        if (selectedThreadId) {
+          await loadThreadMessages(selectedThreadId)
+        }
+      })()
+    }, 6000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [loadConversations, loadAgreements, loadThreadMessages, selectedAgreementId, selectedThreadId])
+
   async function syncProductImages(productId: string, product: ArtisanProduct) {
     const existing = await getProductImages(productId)
     await Promise.all(existing.map((image) => deleteProductImage(image.id)))
@@ -541,9 +588,34 @@ export default function ArtisanPanelClient() {
     }
   }
 
-  async function handleMakeOffer(threadId: string, price: number) {
+  async function handleMakeOffer(
+    threadId: string,
+    price: number,
+    estimatedDeliveryDays: number,
+    productDetails: string,
+  ) {
     try {
-      await makeOffer(threadId, price)
+      await makeOffer(threadId, price, estimatedDeliveryDays, productDetails)
+      await loadAgreements()
+      await loadConversations()
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleSubmitFinalProduct(offerId: string, note: string, imageUrl?: string) {
+    try {
+      await submitFinalProduct(offerId, note, imageUrl)
+      await loadAgreements()
+      await loadConversations()
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleMarkShipped(offerId: string, trackingInfo?: string) {
+    try {
+      await markShipped(offerId, trackingInfo)
       await loadAgreements()
       await loadConversations()
     } catch {
@@ -719,6 +791,8 @@ export default function ArtisanPanelClient() {
                 onSelect={handleSelectAgreement}
                 onSendMessage={handleSendAgreementMessage}
                 onMakeOffer={handleMakeOffer}
+                onSubmitFinalProduct={handleSubmitFinalProduct}
+                onMarkShipped={handleMarkShipped}
               />
             ) : null}
           </CardContent>

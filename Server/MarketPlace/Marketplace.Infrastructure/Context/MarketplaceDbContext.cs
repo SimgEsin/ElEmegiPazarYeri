@@ -96,6 +96,22 @@ public class MarketplaceDbContext : DbContext, IMarketplaceDbContext
             .Property(offer => offer.ProposedPrice)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<Offer>()
+            .Property(offer => offer.ProductDetails)
+            .HasMaxLength(2000);
+
+        modelBuilder.Entity<Offer>()
+            .Property(offer => offer.FinalProductNote)
+            .HasMaxLength(2000);
+
+        modelBuilder.Entity<Offer>()
+            .Property(offer => offer.FinalProductImageUrl)
+            .HasMaxLength(1000);
+
+        modelBuilder.Entity<Offer>()
+            .Property(offer => offer.ShippingTrackingInfo)
+            .HasMaxLength(500);
+
         // 1. Conversation - AppUser Iliskileri (Alici ve Satici)
         modelBuilder.Entity<Conversation>()
             .HasOne(c => c.Buyer)

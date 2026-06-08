@@ -459,6 +459,7 @@ export type ConsensusItem = {
   status: ConsensusStatus
   updatedAt: string
   ctaLabel?: string
+  href?: string
 }
 
 export type NotificationType = "message" | "agreement" | "system"

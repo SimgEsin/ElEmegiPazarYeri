@@ -18,3 +18,7 @@ export async function createReview(productId: string, rating: number, comment?: 
   })
   return response.data
 }
+
+export async function deleteReview(reviewId: string): Promise<void> {
+  await apiClient.delete(`/productreviews/${reviewId}`)
+}

@@ -1,18 +1,29 @@
 "use client"
 
 import { FormEvent, useState } from "react"
-import { CheckCircle2, Hammer, MessagesSquare, SendHorizonal, UserRound, XCircle } from "lucide-react"
+import { CheckCircle2, Hammer, MessagesSquare, SendHorizonal, Truck, UserRound, XCircle } from "lucide-react"
 
 import { formatPrice } from "@/lib/mock-data"
 import type { ThreadMessage } from "@/lib/mock-data"
-import type { OfferStatus } from "@/lib/api/types"
+import { stageLabel } from "@/lib/agreement-stage"
+import type { AgreementStage, OfferStatus } from "@/lib/api/types"
 import { cn } from "@/lib/utils"
 
 export type AgreementThread = {
   id: string
   buyerName: string
   productName: string
-  offer: { id: string; proposedPrice: number; status: OfferStatus } | null
+  offer: {
+    id: string
+    proposedPrice: number
+    estimatedDeliveryDays: number
+    productDetails: string
+    status: OfferStatus
+    stage: AgreementStage
+    finalProductNote?: string | null
+    finalProductImageUrl?: string | null
+    shippingTrackingInfo?: string | null
+  } | null
   updatedAt: string
   messages: ThreadMessage[]
 }
@@ -22,7 +33,9 @@ type AgreementWorkspaceProps = {
   selectedId: string | null
   onSelect: (id: string) => void
   onSendMessage: (id: string, text: string) => void | Promise<void>
-  onMakeOffer: (id: string, price: number) => void | Promise<void>
+  onMakeOffer: (id: string, price: number, estimatedDeliveryDays: number, productDetails: string) => void | Promise<void>
+  onSubmitFinalProduct: (offerId: string, note: string, imageUrl?: string) => void | Promise<void>
+  onMarkShipped: (offerId: string, trackingInfo?: string) => void | Promise<void>
 }
 
 function offerBadge(status: OfferStatus) {
@@ -51,14 +64,55 @@ export default function AgreementWorkspace({
   onSelect,
   onSendMessage,
   onMakeOffer,
+  onSubmitFinalProduct,
+  onMarkShipped,
 }: AgreementWorkspaceProps) {
   const [draft, setDraft] = useState("")
   const [offerPrice, setOfferPrice] = useState("")
+  const [offerDeliveryDays, setOfferDeliveryDays] = useState("")
+  const [offerDetails, setOfferDetails] = useState("")
+  const [finalNote, setFinalNote] = useState("")
+  const [finalImageUrl, setFinalImageUrl] = useState("")
+  const [trackingInfo, setTrackingInfo] = useState("")
   const [busy, setBusy] = useState(false)
 
   const selected = threads.find((thread) => thread.id === selectedId) ?? null
   const offer = selected?.offer ?? null
   const hasPendingOffer = offer?.status === "Pending"
+  const isAccepted = offer?.status === "Accepted"
+
+  async function handleSubmitFinal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!offer) {
+      return
+    }
+    const note = finalNote.trim()
+    if (!note) {
+      return
+    }
+    setBusy(true)
+    try {
+      await onSubmitFinalProduct(offer.id, note, finalImageUrl.trim() || undefined)
+      setFinalNote("")
+      setFinalImageUrl("")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleShip(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!offer) {
+      return
+    }
+    setBusy(true)
+    try {
+      await onMarkShipped(offer.id, trackingInfo.trim() || undefined)
+      setTrackingInfo("")
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function handleSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -84,10 +138,20 @@ export default function AgreementWorkspace({
     if (!parsed || parsed <= 0) {
       return
     }
+    const days = Number.parseInt(offerDeliveryDays.replace(/[^\d]/g, ""), 10)
+    if (!days || days <= 0) {
+      return
+    }
+    const details = offerDetails.trim()
+    if (!details) {
+      return
+    }
     setBusy(true)
     try {
-      await onMakeOffer(selected.id, parsed)
+      await onMakeOffer(selected.id, parsed, days, details)
       setOfferPrice("")
+      setOfferDeliveryDays("")
+      setOfferDetails("")
     } finally {
       setBusy(false)
     }
@@ -195,29 +259,131 @@ export default function AgreementWorkspace({
                   </form>
 
                   {offer ? (
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/10 bg-white p-3 text-sm">
-                      <span className="font-semibold">Son teklif</span>
-                      <span className="text-lg font-black">{formatPrice(offer.proposedPrice)}</span>
+                    <div className="space-y-2 rounded-lg border border-primary/10 bg-white p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold">Son teklif</span>
+                        <span className="text-lg font-black">{formatPrice(offer.proposedPrice)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span className="font-semibold">Teslim süresi</span>
+                        <span>{offer.estimatedDeliveryDays} gün içinde tamamlanıp kargolanır</span>
+                      </div>
+                      {offer.productDetails ? (
+                        <div className="space-y-1 border-t border-primary/10 pt-2">
+                          <span className="text-xs font-semibold">Ürün detayları</span>
+                          <p className="whitespace-pre-line text-xs text-muted-foreground">{offer.productDetails}</p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
-                  {offer?.status === "Accepted" ? (
-                    <p className="text-xs font-semibold text-green-700">Alıcı teklifi onayladı. Mutabakat sağlandı.</p>
+                  {isAccepted && offer ? (
+                    <div className="space-y-2 rounded-lg border border-primary/10 bg-white p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 font-semibold">
+                          <Truck className="size-4 text-primary" />
+                          Üretim ve Teslimat
+                        </span>
+                        <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+                          {stageLabel(offer.stage)}
+                        </span>
+                      </div>
+
+                      {offer.stage === "InProduction" ? (
+                        <form onSubmit={handleSubmitFinal} className="space-y-2">
+                          <p className="text-xs text-muted-foreground">
+                            Ürün hazır olduğunda son hâlini alıcının onayına gönderin.
+                          </p>
+                          <input
+                            value={finalImageUrl}
+                            onChange={(event) => setFinalImageUrl(event.target.value)}
+                            placeholder="Son hâl görsel bağlantısı (opsiyonel)"
+                            className="h-10 w-full rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                          />
+                          <textarea
+                            value={finalNote}
+                            onChange={(event) => setFinalNote(event.target.value)}
+                            placeholder="Ürünün son hâli hakkında açıklama"
+                            rows={3}
+                            className="w-full rounded-lg border border-primary/20 px-3 py-2 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                          />
+                          <button
+                            type="submit"
+                            disabled={busy}
+                            className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+                          >
+                            Son Hâli Gönder
+                          </button>
+                        </form>
+                      ) : null}
+
+                      {offer.stage === "AwaitingApproval" ? (
+                        <p className="text-xs font-semibold text-amber-700">
+                          Ürünün son hâlini gönderdiniz. Alıcının onayını bekleyin.
+                        </p>
+                      ) : null}
+
+                      {offer.stage === "Approved" ? (
+                        <form onSubmit={handleShip} className="space-y-2">
+                          <p className="text-xs font-semibold text-green-700">Alıcı onayladı. Ürünü kargoya verin.</p>
+                          <input
+                            value={trackingInfo}
+                            onChange={(event) => setTrackingInfo(event.target.value)}
+                            placeholder="Kargo firması / takip no (opsiyonel)"
+                            className="h-10 w-full rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                          />
+                          <button
+                            type="submit"
+                            disabled={busy}
+                            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+                          >
+                            <Truck className="size-4" />
+                            Kargoya Verdim
+                          </button>
+                        </form>
+                      ) : null}
+
+                      {offer.stage === "Shipped" ? (
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          Kargoya verdiniz. Alıcının teslim onayını bekleyin.
+                        </p>
+                      ) : null}
+
+                      {offer.stage === "Delivered" ? (
+                        <p className="text-xs font-semibold text-green-700">Sipariş teslim edildi. Mutabakat tamamlandı.</p>
+                      ) : null}
+                    </div>
                   ) : hasPendingOffer ? (
                     <p className="text-xs font-semibold text-amber-700">Teklif gönderildi. Alıcının yanıtını bekleyin.</p>
                   ) : (
-                    <form onSubmit={handleOffer} className="flex flex-col gap-2 sm:flex-row">
-                      <input
-                        inputMode="decimal"
-                        value={offerPrice}
-                        onChange={(event) => setOfferPrice(event.target.value)}
-                        placeholder={offer ? "Yeni teklif tutarı (TL)" : "Resmi teklif tutarı (TL)"}
-                        className="h-11 flex-1 rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                    <form onSubmit={handleOffer} className="space-y-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          inputMode="decimal"
+                          value={offerPrice}
+                          onChange={(event) => setOfferPrice(event.target.value)}
+                          placeholder={offer ? "Yeni teklif tutarı (TL)" : "Resmi teklif tutarı (TL)"}
+                          className="h-11 flex-1 rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+                        />
+                        <input
+                          inputMode="numeric"
+                          value={offerDeliveryDays}
+                          onChange={(event) => setOfferDeliveryDays(event.target.value)}
+                          placeholder="Teslim süresi (gün)"
+                          className="h-11 rounded-lg border border-primary/20 px-3 text-sm outline-none ring-primary/40 transition focus:ring-2 sm:w-44"
+                        />
+                      </div>
+                      <textarea
+                        value={offerDetails}
+                        onChange={(event) => setOfferDetails(event.target.value)}
+                        placeholder="Ürünün kesin detayları (malzeme, ölçü, renk, kişiselleştirme vb.)"
+                        rows={3}
+                        className="w-full rounded-lg border border-primary/20 px-3 py-2 text-sm outline-none ring-primary/40 transition focus:ring-2"
                       />
                       <button
                         type="submit"
                         disabled={busy}
-                        className="inline-flex h-11 items-center justify-center rounded-lg border border-primary/20 bg-primary/5 px-5 text-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-primary/20 bg-primary/5 px-5 text-sm font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
                       >
                         {offer ? "Yeni Teklif Gönder" : "Resmi Teklif Gönder"}
                       </button>

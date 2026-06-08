@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import {
   BellDot,
@@ -472,11 +473,13 @@ export function AgreementsList({ title, description, items, highlightedItemId }:
         </Card>
       ) : (
         <div className="space-y-3">
-          {items.map((item) => (
+          {items.map((item) => {
+            const card = (
             <Card
               key={item.id}
               className={cn(
                 "border-primary/10 transition-shadow hover:shadow-md",
+                item.href ? "cursor-pointer" : "",
                 highlightedItemId === item.id ? "border-primary/30 bg-primary/5" : "bg-card"
               )}
             >
@@ -506,7 +509,16 @@ export function AgreementsList({ title, description, items, highlightedItemId }:
                 </div>
               </CardContent>
             </Card>
-          ))}
+            )
+
+            return item.href ? (
+              <Link key={item.id} href={item.href} className="block">
+                {card}
+              </Link>
+            ) : (
+              card
+            )
+          })}
         </div>
       )}
     </div>

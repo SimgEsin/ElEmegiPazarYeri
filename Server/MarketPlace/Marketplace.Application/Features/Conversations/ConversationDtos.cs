@@ -14,12 +14,25 @@ public sealed class MakeOfferDto
 {
     public required Guid ConversationId { get; init; }
     public required decimal ProposedPrice { get; init; }
+    public required int EstimatedDeliveryDays { get; init; }
+    public required string ProductDetails { get; init; }
 }
 
 public sealed class RespondToOfferDto
 {
     public required Guid OfferId { get; init; }
     public bool IsAccepted { get; init; }
+}
+
+public sealed class SubmitFinalProductDto
+{
+    public required string Note { get; init; }
+    public string? ImageUrl { get; init; }
+}
+
+public sealed class MarkShippedDto
+{
+    public string? TrackingInfo { get; init; }
 }
 
 public sealed class ConversationListDto
@@ -43,7 +56,13 @@ public sealed class OfferSummaryDto
 {
     public Guid Id { get; init; }
     public decimal ProposedPrice { get; init; }
+    public int EstimatedDeliveryDays { get; init; }
+    public string ProductDetails { get; init; } = string.Empty;
     public OfferStatus Status { get; init; }
+    public AgreementStage Stage { get; init; }
+    public string? FinalProductNote { get; init; }
+    public string? FinalProductImageUrl { get; init; }
+    public string? ShippingTrackingInfo { get; init; }
 }
 
 public sealed class AgreementDto
@@ -52,9 +71,16 @@ public sealed class AgreementDto
     public Guid ConversationId { get; init; }
     public Guid ProductId { get; init; }
     public string ProductName { get; init; } = string.Empty;
+    public string ProductSlug { get; init; } = string.Empty;
     public string CounterpartyName { get; init; } = string.Empty;
     public decimal ProposedPrice { get; init; }
+    public int EstimatedDeliveryDays { get; init; }
+    public string ProductDetails { get; init; } = string.Empty;
     public OfferStatus Status { get; init; }
+    public AgreementStage Stage { get; init; }
+    public string? FinalProductNote { get; init; }
+    public string? FinalProductImageUrl { get; init; }
+    public string? ShippingTrackingInfo { get; init; }
     public DateTime UpdatedAt { get; init; }
 }
 

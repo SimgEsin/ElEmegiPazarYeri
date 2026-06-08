@@ -32,6 +32,7 @@ import MessagesSection from "./messages-section"
 import NotificationsSection from "./notifications-section"
 import { setIsLoggedIn } from "@/lib/auth-storage"
 import { formatPrice } from "@/lib/mock-data"
+import { stageLabel } from "@/lib/agreement-stage"
 import type {
   ConsensusItem,
   MessageThread,
@@ -218,10 +219,14 @@ function toConsensusItem(agreement: Agreement): ConsensusItem {
     title: `${agreement.productName} / teklif`,
     counterpartyName: agreement.counterpartyName,
     productName: agreement.productName,
-    summary: `Teklif tutarı: ${formatPrice(agreement.proposedPrice)}`,
+    summary:
+      agreement.status === "Accepted"
+        ? `Teklif tutarı: ${formatPrice(agreement.proposedPrice)} · Süreç: ${stageLabel(agreement.stage)}`
+        : `Teklif tutarı: ${formatPrice(agreement.proposedPrice)} · Teslim: ${agreement.estimatedDeliveryDays} gün`,
     status: agreementStatusLabels[agreement.status],
     updatedAt: agreement.updatedAt,
     ctaLabel: agreementStatusLabels[agreement.status],
+    href: agreement.productSlug ? `/products/${agreement.productSlug}/siparis-baslat` : undefined,
   }
 }
 
@@ -852,7 +857,8 @@ function LogoutSection({ onLogout }: { onLogout: () => void }) {
 }
 
 export default function ProfileClient() {
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
+  const isArtisan = (user?.roles ?? []).includes("artisan")
   const avatarFileInputRef = useRef<HTMLInputElement>(null)
   const [activeSection, setActiveSection] = useState<ProfileSection>("info")
 
@@ -1249,7 +1255,7 @@ export default function ProfileClient() {
     const targetModule = (backendNotification?.targetModule ?? "").toLowerCase()
     const targetId = backendNotification?.targetId ?? null
 
-    if (targetModule === "messages") {
+    if (targetModule === "messages" && !isArtisan) {
       setActiveSection("messages")
       if (targetId) {
         handleSelectThread(targetId)
@@ -1257,7 +1263,7 @@ export default function ProfileClient() {
       return
     }
 
-    if (targetModule === "agreements") {
+    if (targetModule === "agreements" && !isArtisan) {
       setActiveSection("agreements")
       return
     }
@@ -1323,7 +1329,9 @@ export default function ProfileClient() {
             <Separator className="my-1" />
 
             <nav className="mt-1 space-y-0.5" aria-label="Profil menüsü">
-              {sidebarItems.map((item) => {
+              {sidebarItems
+                .filter((item) => !(isArtisan && (item.id === "messages" || item.id === "agreements")))
+                .map((item) => {
                 const isActive = activeSection === item.id
                 const Icon = item.icon
                 const isLogout = item.id === "logout"
@@ -1407,7 +1415,7 @@ export default function ProfileClient() {
             {activeSection === "notifications" ? (
               <NotificationsSection notifications={notificationItems} onOpenTarget={handleOpenNotification} />
             ) : null}
-            {activeSection === "messages" ? (
+            {activeSection === "messages" && !isArtisan ? (
               <MessagesSection
                 threads={messageThreads}
                 selectedThreadId={selectedThreadId}
@@ -1416,7 +1424,7 @@ export default function ProfileClient() {
                 onCloseThread={handleCloseThread}
               />
             ) : null}
-            {activeSection === "agreements" ? (
+            {activeSection === "agreements" && !isArtisan ? (
               <AgreementsSection items={consensusItems} highlightedItemId={null} />
             ) : null}
             {activeSection === "logout" ? <LogoutSection onLogout={handleLogout} /> : null}

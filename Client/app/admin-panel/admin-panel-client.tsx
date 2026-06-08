@@ -38,7 +38,7 @@ import {
   updateProduct,
 } from "@/lib/api/products"
 import { getProductReports, resolveProductReport, type ProductReport } from "@/lib/api/reports"
-import { getAllReviews } from "@/lib/api/reviews"
+import { deleteReview, getAllReviews } from "@/lib/api/reviews"
 import { getStoriesFeed, type StoryFeedItem } from "@/lib/api/stories"
 import type { ArtisanProfile, Category, ProductListItem, ProductReview } from "@/lib/api/types"
 import {
@@ -155,6 +155,14 @@ export default function AdminPanelClient() {
     }
   }, [])
 
+  const loadReviews = useCallback(async () => {
+    try {
+      setReviews(await getAllReviews())
+    } catch {
+      // ignore
+    }
+  }, [])
+
   const loadAnalytics = useCallback(async () => {
     try {
       setAnalytics(await getAdminAnalytics())
@@ -186,15 +194,11 @@ export default function AdminPanelClient() {
         // ignore
       }
 
-      try {
-        setReviews(await getAllReviews())
-      } catch {
-        // ignore
-      }
+      await loadReviews()
     }
 
     void bootstrap()
-  }, [loadAnalytics, loadProducts, loadReports, loadArtisans, loadApplications, loadOrders])
+  }, [loadAnalytics, loadProducts, loadReports, loadArtisans, loadApplications, loadOrders, loadReviews])
 
   const handleSaveProduct = useCallback(
     async (productId: string, values: ProductEditValues) => {
@@ -277,6 +281,18 @@ export default function AdminPanelClient() {
     [loadApplications],
   )
 
+  const handleDeleteReview = useCallback(
+    async (reviewId: string) => {
+      try {
+        await deleteReview(reviewId)
+        await loadReviews()
+      } catch {
+        // ignore
+      }
+    },
+    [loadReviews],
+  )
+
   const handleCancelOrder = useCallback(
     async (orderId: string) => {
       try {
@@ -318,7 +334,7 @@ export default function AdminPanelClient() {
           />
         )
       case "experience":
-        return <CustomerExperienceManagementModule reviews={reviews} />
+        return <CustomerExperienceManagementModule reviews={reviews} onDeleteReview={handleDeleteReview} />
       case "analytics":
         return <AnalyticsModule analytics={analytics} />
     }

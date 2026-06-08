@@ -1,39 +1,64 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import { useRouter } from "next/navigation"
 import { Star, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { useAuth } from "@/components/providers/auth-provider"
+import { createReview } from "@/lib/api/reviews"
 
 type ExperienceShareModalProps = {
+  productId: string
   productName: string
 }
 
-export function ExperienceShareModal({ productName }: ExperienceShareModalProps) {
+export function ExperienceShareModal({ productId, productName }: ExperienceShareModalProps) {
+  const { isAuthenticated } = useAuth()
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [fullName, setFullName] = useState("")
   const [rating, setRating] = useState(5)
   const [experience, setExperience] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isPending, setIsPending] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const closeModal = () => {
     setIsOpen(false)
     setIsSubmitted(false)
+    setErrorMessage(null)
   }
 
   const openModal = () => {
     setIsOpen(true)
     setIsSubmitted(false)
+    setErrorMessage(null)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setIsSubmitted(true)
-    setFullName("")
-    setRating(5)
-    setExperience("")
+
+    if (!isAuthenticated) {
+      router.push("/login")
+      return
+    }
+
+    setIsPending(true)
+    setErrorMessage(null)
+    try {
+      await createReview(productId, rating, experience)
+      setIsSubmitted(true)
+      setRating(5)
+      setExperience("")
+      router.refresh()
+    } catch (error) {
+      console.error("Yorum gönderilemedi:", error)
+      setErrorMessage("Yorumunuz gönderilemedi. Lütfen tekrar deneyin.")
+    } finally {
+      setIsPending(false)
+    }
   }
 
   const handleRatingChange = (value: string) => {
@@ -84,19 +109,6 @@ export function ExperienceShareModal({ productName }: ExperienceShareModalProps)
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="space-y-2">
-                  <label htmlFor="experience-full-name" className="text-sm font-semibold">
-                    Ad Soyad
-                  </label>
-                  <Input
-                    id="experience-full-name"
-                    value={fullName}
-                    onChange={(event) => setFullName(event.target.value)}
-                    placeholder="Adınız ve soyadınız"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <label htmlFor="experience-rating" className="text-sm font-semibold">
                     Puan
                   </label>
@@ -129,8 +141,12 @@ export function ExperienceShareModal({ productName }: ExperienceShareModalProps)
                   />
                 </div>
 
-                <Button type="submit" className="w-full">
-                  Gönder
+                {errorMessage ? (
+                  <p className="text-center text-xs font-medium text-red-600">{errorMessage}</p>
+                ) : null}
+
+                <Button type="submit" className="w-full" disabled={isPending}>
+                  {isPending ? "Gönderiliyor..." : "Gönder"}
                 </Button>
               </form>
             )}

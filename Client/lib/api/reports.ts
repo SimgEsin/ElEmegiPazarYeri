@@ -11,6 +11,18 @@ export type ProductReport = {
   updatedAt?: string | null
 }
 
+export async function createProductReport(
+  productId: string,
+  reason: string,
+  description?: string,
+): Promise<string> {
+  // POST binds CreateProductReportCommand(CreateProductReportDto ProductReport).
+  const response = await apiClient.post<string>("/productreports", {
+    productReport: { productId, reason, description },
+  })
+  return response.data
+}
+
 export async function getProductReports(options?: { signal?: AbortSignal }): Promise<ProductReport[]> {
   const response = await apiClient.get<ProductReport[]>("/productreports", { signal: options?.signal })
   return response.data

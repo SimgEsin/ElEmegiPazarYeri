@@ -170,6 +170,16 @@ public sealed class MakeOfferCommandHandler : IRequestHandler<MakeOfferCommand, 
             throw new InvalidOperationException("Teklif tutari 0'dan buyuk olmalidir.");
         }
 
+        if (dto.EstimatedDeliveryDays <= 0)
+        {
+            throw new InvalidOperationException("Tahmini teslim suresi 0'dan buyuk olmalidir.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.ProductDetails))
+        {
+            throw new InvalidOperationException("Urun detaylari bos olamaz.");
+        }
+
         var conversation = await _dbContext.Conversations
             .FirstOrDefaultAsync(entity => entity.Id == dto.ConversationId && !entity.IsDeleted, cancellationToken);
 
@@ -187,6 +197,8 @@ public sealed class MakeOfferCommandHandler : IRequestHandler<MakeOfferCommand, 
         {
             ConversationId = conversation.Id,
             ProposedPrice = dto.ProposedPrice,
+            EstimatedDeliveryDays = dto.EstimatedDeliveryDays,
+            ProductDetails = dto.ProductDetails.Trim(),
             Status = OfferStatus.Pending
         };
 
@@ -201,6 +213,8 @@ public sealed class MakeOfferCommandHandler : IRequestHandler<MakeOfferCommand, 
                 OfferId = offer.Id,
                 ConversationId = conversation.Id,
                 ProposedPrice = offer.ProposedPrice,
+                EstimatedDeliveryDays = offer.EstimatedDeliveryDays,
+                ProductDetails = offer.ProductDetails,
                 Status = offer.Status
             });
 
@@ -222,11 +236,16 @@ public sealed class RespondToOfferCommandHandler : IRequestHandler<RespondToOffe
 {
     private readonly IMarketplaceDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationService _notificationService;
 
-    public RespondToOfferCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    public RespondToOfferCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        INotificationService notificationService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _notificationService = notificationService;
     }
 
     public async Task<bool> Handle(RespondToOfferCommand request, CancellationToken cancellationToken)
@@ -252,16 +271,394 @@ public sealed class RespondToOfferCommandHandler : IRequestHandler<RespondToOffe
             throw new UnauthorizedAccessException("Sadece alici teklife yanit verebilir.");
         }
 
-        offer.Status = request.Offer.IsAccepted ? OfferStatus.Accepted : OfferStatus.Rejected;
+        if (request.Offer.IsAccepted)
+        {
+            offer.Status = OfferStatus.Accepted;
+            offer.Stage = AgreementStage.InProduction;
+        }
+        else
+        {
+            offer.Status = OfferStatus.Rejected;
+            offer.Stage = AgreementStage.None;
+        }
+
         offer.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (request.Offer.IsAccepted)
+        {
+            await _notificationService.SendNotificationAsync(
+                offer.Conversation.ArtisanId.ToString(),
+                "Mutabakat saglandi. Uretime baslayabilirsiniz.",
+                new
+                {
+                    OfferId = offer.Id,
+                    ConversationId = offer.ConversationId,
+                    Stage = offer.Stage
+                });
+        }
+
         return true;
     }
 
     private Guid GetCurrentUserId()
     {
         if (Guid.TryParse(_currentUserService.UserId, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+    }
+}
+
+public sealed class SubmitFinalProductCommandHandler : IRequestHandler<SubmitFinalProductCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationService _notificationService;
+
+    public SubmitFinalProductCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        INotificationService notificationService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+        _notificationService = notificationService;
+    }
+
+    public async Task<bool> Handle(SubmitFinalProductCommand request, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId(_currentUserService);
+
+        if (string.IsNullOrWhiteSpace(request.FinalProduct.Note))
+        {
+            throw new InvalidOperationException("Urunun son hali icin aciklama bos olamaz.");
+        }
+
+        var offer = await _dbContext.Offers
+            .Include(entity => entity.Conversation)
+            .FirstOrDefaultAsync(entity => entity.Id == request.OfferId && !entity.IsDeleted, cancellationToken);
+
+        if (offer is null)
+        {
+            return false;
+        }
+
+        if (offer.Conversation is null || offer.Conversation.ArtisanId != userId)
+        {
+            throw new UnauthorizedAccessException("Sadece satici urunun son halini gonderebilir.");
+        }
+
+        if (offer.Status != OfferStatus.Accepted || offer.Stage != AgreementStage.InProduction)
+        {
+            throw new InvalidOperationException("Bu asamada urunun son hali gonderilemez.");
+        }
+
+        offer.FinalProductNote = request.FinalProduct.Note.Trim();
+        offer.FinalProductImageUrl = string.IsNullOrWhiteSpace(request.FinalProduct.ImageUrl)
+            ? null
+            : request.FinalProduct.ImageUrl.Trim();
+        offer.Stage = AgreementStage.AwaitingApproval;
+        offer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _notificationService.SendNotificationAsync(
+            offer.Conversation.BuyerId.ToString(),
+            "Saticiniz urunun son halini paylasti. Onayinizi bekliyor.",
+            new
+            {
+                OfferId = offer.Id,
+                ConversationId = offer.ConversationId,
+                Stage = offer.Stage
+            });
+
+        return true;
+    }
+
+    private static Guid GetCurrentUserId(ICurrentUserService currentUserService)
+    {
+        if (Guid.TryParse(currentUserService.UserId, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+    }
+}
+
+public sealed class ApproveFinalProductCommandHandler : IRequestHandler<ApproveFinalProductCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationService _notificationService;
+
+    public ApproveFinalProductCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        INotificationService notificationService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+        _notificationService = notificationService;
+    }
+
+    public async Task<bool> Handle(ApproveFinalProductCommand request, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId(_currentUserService);
+
+        var offer = await _dbContext.Offers
+            .Include(entity => entity.Conversation)
+            .FirstOrDefaultAsync(entity => entity.Id == request.OfferId && !entity.IsDeleted, cancellationToken);
+
+        if (offer is null)
+        {
+            return false;
+        }
+
+        if (offer.Conversation is null || offer.Conversation.BuyerId != userId)
+        {
+            throw new UnauthorizedAccessException("Sadece alici son hali onaylayabilir.");
+        }
+
+        if (offer.Stage != AgreementStage.AwaitingApproval)
+        {
+            throw new InvalidOperationException("Onaylanacak bir son urun gonderimi yok.");
+        }
+
+        offer.Stage = AgreementStage.Approved;
+        offer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _notificationService.SendNotificationAsync(
+            offer.Conversation.ArtisanId.ToString(),
+            "Alici urunun son halini onayladi. Kargoya verebilirsiniz.",
+            new
+            {
+                OfferId = offer.Id,
+                ConversationId = offer.ConversationId,
+                Stage = offer.Stage
+            });
+
+        return true;
+    }
+
+    private static Guid GetCurrentUserId(ICurrentUserService currentUserService)
+    {
+        if (Guid.TryParse(currentUserService.UserId, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+    }
+}
+
+public sealed class RequestRevisionCommandHandler : IRequestHandler<RequestRevisionCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationService _notificationService;
+
+    public RequestRevisionCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        INotificationService notificationService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+        _notificationService = notificationService;
+    }
+
+    public async Task<bool> Handle(RequestRevisionCommand request, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId(_currentUserService);
+
+        var offer = await _dbContext.Offers
+            .Include(entity => entity.Conversation)
+            .FirstOrDefaultAsync(entity => entity.Id == request.OfferId && !entity.IsDeleted, cancellationToken);
+
+        if (offer is null)
+        {
+            return false;
+        }
+
+        if (offer.Conversation is null || offer.Conversation.BuyerId != userId)
+        {
+            throw new UnauthorizedAccessException("Sadece alici revizyon isteyebilir.");
+        }
+
+        if (offer.Stage != AgreementStage.AwaitingApproval)
+        {
+            throw new InvalidOperationException("Bu asamada revizyon istenemez.");
+        }
+
+        offer.Stage = AgreementStage.InProduction;
+        offer.FinalProductNote = null;
+        offer.FinalProductImageUrl = null;
+        offer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _notificationService.SendNotificationAsync(
+            offer.Conversation.ArtisanId.ToString(),
+            "Alici revizyon talep etti. Urun yeniden uretim asamasinda.",
+            new
+            {
+                OfferId = offer.Id,
+                ConversationId = offer.ConversationId,
+                Stage = offer.Stage
+            });
+
+        return true;
+    }
+
+    private static Guid GetCurrentUserId(ICurrentUserService currentUserService)
+    {
+        if (Guid.TryParse(currentUserService.UserId, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+    }
+}
+
+public sealed class MarkShippedCommandHandler : IRequestHandler<MarkShippedCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationService _notificationService;
+
+    public MarkShippedCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        INotificationService notificationService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+        _notificationService = notificationService;
+    }
+
+    public async Task<bool> Handle(MarkShippedCommand request, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId(_currentUserService);
+
+        var offer = await _dbContext.Offers
+            .Include(entity => entity.Conversation)
+            .FirstOrDefaultAsync(entity => entity.Id == request.OfferId && !entity.IsDeleted, cancellationToken);
+
+        if (offer is null)
+        {
+            return false;
+        }
+
+        if (offer.Conversation is null || offer.Conversation.ArtisanId != userId)
+        {
+            throw new UnauthorizedAccessException("Sadece satici kargoya verebilir.");
+        }
+
+        if (offer.Stage != AgreementStage.Approved)
+        {
+            throw new InvalidOperationException("Kargolama icin once alicinin onayi gerekir.");
+        }
+
+        offer.ShippingTrackingInfo = string.IsNullOrWhiteSpace(request.Shipping.TrackingInfo)
+            ? null
+            : request.Shipping.TrackingInfo.Trim();
+        offer.Stage = AgreementStage.Shipped;
+        offer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _notificationService.SendNotificationAsync(
+            offer.Conversation.BuyerId.ToString(),
+            "Siparisiniz kargoya verildi.",
+            new
+            {
+                OfferId = offer.Id,
+                ConversationId = offer.ConversationId,
+                Stage = offer.Stage
+            });
+
+        return true;
+    }
+
+    private static Guid GetCurrentUserId(ICurrentUserService currentUserService)
+    {
+        if (Guid.TryParse(currentUserService.UserId, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("Kullanici bilgisi bulunamadi.");
+    }
+}
+
+public sealed class MarkDeliveredCommandHandler : IRequestHandler<MarkDeliveredCommand, bool>
+{
+    private readonly IMarketplaceDbContext _dbContext;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly INotificationService _notificationService;
+
+    public MarkDeliveredCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        INotificationService notificationService)
+    {
+        _dbContext = dbContext;
+        _currentUserService = currentUserService;
+        _notificationService = notificationService;
+    }
+
+    public async Task<bool> Handle(MarkDeliveredCommand request, CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId(_currentUserService);
+
+        var offer = await _dbContext.Offers
+            .Include(entity => entity.Conversation)
+            .FirstOrDefaultAsync(entity => entity.Id == request.OfferId && !entity.IsDeleted, cancellationToken);
+
+        if (offer is null)
+        {
+            return false;
+        }
+
+        if (offer.Conversation is null || offer.Conversation.BuyerId != userId)
+        {
+            throw new UnauthorizedAccessException("Sadece alici teslim aldigini onaylayabilir.");
+        }
+
+        if (offer.Stage != AgreementStage.Shipped)
+        {
+            throw new InvalidOperationException("Teslim onayi icin siparisin kargoda olmasi gerekir.");
+        }
+
+        offer.Stage = AgreementStage.Delivered;
+        offer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _notificationService.SendNotificationAsync(
+            offer.Conversation.ArtisanId.ToString(),
+            "Alici siparisi teslim aldigini onayladi. Mutabakat tamamlandi.",
+            new
+            {
+                OfferId = offer.Id,
+                ConversationId = offer.ConversationId,
+                Stage = offer.Stage
+            });
+
+        return true;
+    }
+
+    private static Guid GetCurrentUserId(ICurrentUserService currentUserService)
+    {
+        if (Guid.TryParse(currentUserService.UserId, out var userId))
         {
             return userId;
         }
@@ -344,11 +741,18 @@ public sealed class GetMyAgreementsQueryHandler : IRequestHandler<GetMyAgreement
                 ConversationId = offer.ConversationId,
                 ProductId = offer.Conversation!.ProductId,
                 ProductName = offer.Conversation.Product != null ? offer.Conversation.Product.Name : string.Empty,
+                ProductSlug = offer.Conversation.Product != null ? offer.Conversation.Product.Slug : string.Empty,
                 CounterpartyName = offer.Conversation.BuyerId == userId
                     ? (offer.Conversation.ArtisanProfile != null ? offer.Conversation.ArtisanProfile.DisplayName : string.Empty)
                     : (offer.Conversation.Buyer != null ? offer.Conversation.Buyer.FullName : string.Empty),
                 ProposedPrice = offer.ProposedPrice,
+                EstimatedDeliveryDays = offer.EstimatedDeliveryDays,
+                ProductDetails = offer.ProductDetails,
                 Status = offer.Status,
+                Stage = offer.Stage,
+                FinalProductNote = offer.FinalProductNote,
+                FinalProductImageUrl = offer.FinalProductImageUrl,
+                ShippingTrackingInfo = offer.ShippingTrackingInfo,
                 UpdatedAt = offer.UpdatedAt ?? offer.CreatedAt
             })
             .ToListAsync(cancellationToken);
@@ -418,7 +822,13 @@ public sealed class GetMyConversationsQueryHandler : IRequestHandler<GetMyConver
                     {
                         Id = activeOffer.Id,
                         ProposedPrice = activeOffer.ProposedPrice,
-                        Status = activeOffer.Status
+                        EstimatedDeliveryDays = activeOffer.EstimatedDeliveryDays,
+                        ProductDetails = activeOffer.ProductDetails,
+                        Status = activeOffer.Status,
+                        Stage = activeOffer.Stage,
+                        FinalProductNote = activeOffer.FinalProductNote,
+                        FinalProductImageUrl = activeOffer.FinalProductImageUrl,
+                        ShippingTrackingInfo = activeOffer.ShippingTrackingInfo
                     }
             };
         }).ToList();

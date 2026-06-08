@@ -15,6 +15,14 @@ export type OrderStatus =
 
 export type OfferStatus = "Pending" | "Accepted" | "Rejected"
 
+export type AgreementStage =
+  | "None"
+  | "InProduction"
+  | "AwaitingApproval"
+  | "Approved"
+  | "Shipped"
+  | "Delivered"
+
 export type ConversationType = "Message" | "Agreement"
 
 export type ProductImageType = "Hero" | "Gallery" | "Story" | "OwnerGallery"
@@ -240,7 +248,13 @@ export type SalesSettings = {
 export type OfferSummary = {
   id: string
   proposedPrice: number
+  estimatedDeliveryDays: number
+  productDetails: string
   status: OfferStatus
+  stage: AgreementStage
+  finalProductNote?: string | null
+  finalProductImageUrl?: string | null
+  shippingTrackingInfo?: string | null
 }
 
 export type ConversationListItem = {

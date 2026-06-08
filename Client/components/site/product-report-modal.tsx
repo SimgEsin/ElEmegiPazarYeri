@@ -3,11 +3,13 @@
 import { useState, type FormEvent } from "react"
 import { Flag, Mail, TriangleAlert, X } from "lucide-react"
 
+import { createProductReport } from "@/lib/api/reports"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type ProductReportModalProps = {
+  productId: string
   productName: string
 }
 
@@ -19,31 +21,48 @@ const reportReasons = [
   "Diğer",
 ] as const
 
-export function ProductReportModal({ productName }: ProductReportModalProps) {
+export function ProductReportModal({ productId, productName }: ProductReportModalProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [reporterName, setReporterName] = useState("")
   const [email, setEmail] = useState("")
   const [reason, setReason] = useState<(typeof reportReasons)[number]>(reportReasons[0])
   const [details, setDetails] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const resetForm = () => {
+    setReporterName("")
+    setEmail("")
+    setReason(reportReasons[0])
+    setDetails("")
+  }
 
   const closeModal = () => {
     setIsOpen(false)
     setIsSubmitted(false)
+    setError(null)
   }
 
   const openModal = () => {
     setIsOpen(true)
     setIsSubmitted(false)
+    setError(null)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setIsSubmitted(true)
-    setReporterName("")
-    setEmail("")
-    setReason(reportReasons[0])
-    setDetails("")
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      await createProductReport(productId, reason, details.trim() || undefined)
+      setIsSubmitted(true)
+      resetForm()
+    } catch {
+      setError("Rapor gönderilemedi. Lütfen giriş yaptığınızdan emin olun ve tekrar deneyin.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -76,7 +95,7 @@ export function ProductReportModal({ productName }: ProductReportModalProps) {
                 <div>
                   <h3 className="text-xl font-black">Bu ürünü neden raporlamak istiyorsunuz?</h3>
                   <p className="text-sm text-muted-foreground">
-                    {productName} için gördüğünüz sorunu paylaşın. Gönderim statik demodur, kayıt oluşturmaz.
+                    {productName} için gördüğünüz sorunu paylaşın. Raporunuz admin moderasyon kuyruğuna iletilir.
                   </p>
                 </div>
               </div>
@@ -90,7 +109,7 @@ export function ProductReportModal({ productName }: ProductReportModalProps) {
               <div className="space-y-4 rounded-2xl border border-primary/15 bg-primary/5 p-5">
                 <p className="font-semibold text-primary">Raporunuz alındı.</p>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  İnceleme ekibi bu bildirim türünü ürün moderasyon kuyruğuna yönlendirir. Bu akış şimdilik statik arayüz olarak çalışıyor.
+                  İnceleme ekibi bu bildirim türünü ürün moderasyon kuyruğuna yönlendirir. En kısa sürede değerlendirilecektir.
                 </p>
                 <Button type="button" className="w-full" onClick={closeModal}>
                   Kapat
@@ -167,8 +186,14 @@ export function ProductReportModal({ productName }: ProductReportModalProps) {
                   Bu form ürün moderasyonu içindir. Sipariş veya teslimat sorunu yaşıyorsanız destek akışını kullanmanız gerekir.
                 </div>
 
-                <Button type="submit" className="w-full">
-                  Raporu Gönder
+                {error ? (
+                  <p className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                    {error}
+                  </p>
+                ) : null}
+
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? "Gönderiliyor..." : "Raporu Gönder"}
                 </Button>
               </form>
             )}

@@ -185,7 +185,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                 ) : (
                   <AddToCartButton productId={product.id} />
                 )}
-                <ProductReportModal productName={product.name} />
+                <ProductReportModal productId={product.id} productName={product.name} />
                 <p className="text-center text-[10px] tracking-widest text-muted-foreground uppercase">{deliveryText}</p>
               </div>
             </div>
@@ -287,7 +287,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
               <span className="text-sm text-stone-500">({product.reviewCount} Değerlendirme)</span>
             </div>
           </div>
-          <ExperienceShareModal productName={product.name} />
+          <ExperienceShareModal productId={product.id} productName={product.name} />
         </div>
 
         {ownerGalleryPhotos.length > 0 ? (
