@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/conversations"
 import { formatTry } from "@/lib/format"
 import { stageLabel } from "@/lib/agreement-stage"
+import { useRealtimeNotifications } from "@/lib/use-realtime-notifications"
 import type { AgreementStage, OfferStatus, ProductDetails } from "@/lib/api/types"
 
 type OfferView = {
@@ -209,6 +210,16 @@ export default function MutabakatClient({ slug }: { slug: string }) {
       window.clearInterval(timer)
     }
   }, [product, artisanProfileId, viewerIsArtisan, conversationId, loadConversationState])
+
+  // SignalR: sunucudan "yeni mesaj/teklif" bildirimi gelince, polling'in 6 saniyesini
+  // beklemeden ANINDA yeniden yukle. Boylece karsi tarafin mesaji gercek zamanli duser.
+  useRealtimeNotifications(() => {
+    if (product && artisanProfileId) {
+      loadConversationState(product.id, artisanProfileId, viewerIsArtisan, conversationId).catch(
+        () => undefined,
+      )
+    }
+  })
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" })
