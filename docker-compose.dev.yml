@@ -1,0 +1,34 @@
+# Geliştirme ortamı yardımcı servisleri (RabbitMQ + e-posta yakalayıcı).
+# SQL Server ayrı bir container'da (elemegi-sql) çalışmaya devam eder; burada yer almaz.
+#
+# Başlat:  docker compose -f docker-compose.dev.yml up -d
+# Durdur:  docker compose -f docker-compose.dev.yml down
+#
+# RabbitMQ yönetim paneli:  http://localhost:15672  (guest / guest)
+# MailHog gelen kutusu:     http://localhost:8025
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: elemegi-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP (uygulama bağlantısı)
+      - "15672:15672"  # Yönetim arayüzü
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog
+    platform: linux/amd64  # MailHog yalnızca amd64; Apple Silicon'da Rosetta ile çalışır
+    container_name: elemegi-mailhog
+    ports:
+      - "1025:1025"    # SMTP (appsettings Smtp.Port ile eşleşir)
+      - "8025:8025"    # Web arayüzü
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:

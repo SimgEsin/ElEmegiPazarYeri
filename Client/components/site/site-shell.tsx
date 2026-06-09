@@ -10,6 +10,7 @@ import { useAuth } from "@/components/providers/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { HeaderSearch } from "@/components/site/header-search"
+import { NotificationBell } from "@/components/site/notification-bell"
 
 const primaryLinks = [
   { href: "/categories", label: "Kategoriler" },
@@ -140,6 +141,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
                     </Link>
                   </Button>
                 ) : null}
+                {isLoggedIn ? <NotificationBell /> : null}
                 <Button
                   asChild
                   size="icon-sm"

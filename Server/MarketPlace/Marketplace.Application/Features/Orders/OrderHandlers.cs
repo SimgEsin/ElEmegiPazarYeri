@@ -1,8 +1,11 @@
 using MediatR;
 using Marketplace.Application.Common.Interfaces;
+using Marketplace.Application.Common.Models;
 using Marketplace.Application.Interfaces;
+using Marketplace.Application.Features.Orders.Observers;
 using Marketplace.Domain.Entities;
 using Marketplace.Domain.Enums;
+using Marketplace.Domain.OrderWorkflow;
 using Microsoft.EntityFrameworkCore;
 
 namespace Marketplace.Application.Features.Orders;
@@ -11,11 +14,19 @@ public sealed class CheckoutCartCommandHandler : IRequestHandler<CheckoutCartCom
 {
     private readonly IMarketplaceDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IEmailMessagePublisher _emailPublisher;
+    private readonly INotificationService _notificationService;
 
-    public CheckoutCartCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    public CheckoutCartCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IEmailMessagePublisher emailPublisher,
+        INotificationService notificationService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _emailPublisher = emailPublisher;
+        _notificationService = notificationService;
     }
 
     public async Task<Guid> Handle(CheckoutCartCommand request, CancellationToken cancellationToken)
@@ -121,7 +132,52 @@ public sealed class CheckoutCartCommandHandler : IRequestHandler<CheckoutCartCom
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        // SignalR: header'daki bildirim zilinin rozeti aninda guncellensin diye
+        // siparis olusur olmaz aliciya ve (varsa) zanaatkara anlik push gonderiyoruz.
+        await _notificationService.SendNotificationAsync(
+            userId.ToString(),
+            "Siparişiniz alındı.",
+            new { OrderId = order.Id, OrderNo = order.OrderNo });
+
+        if (firstArtisanId != userId)
+        {
+            await _notificationService.SendNotificationAsync(
+                firstArtisanId.ToString(),
+                "Yeni bir siparişiniz var.",
+                new { OrderId = order.Id, OrderNo = order.OrderNo });
+        }
+
+        await PublishOrderEmailsAsync(userId, firstArtisanId, order, cancellationToken);
+
         return order.Id;
+    }
+
+    private async Task PublishOrderEmailsAsync(Guid buyerId, Guid artisanId, Order order, CancellationToken cancellationToken)
+    {
+        var participants = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == buyerId || user.Id == artisanId)
+            .Select(user => new { user.Id, user.Email, user.FullName })
+            .ToListAsync(cancellationToken);
+
+        var buyer = participants.FirstOrDefault(user => user.Id == buyerId);
+        if (buyer is not null && !string.IsNullOrWhiteSpace(buyer.Email))
+        {
+            await _emailPublisher.PublishAsync(
+                EmailTemplates.OrderCreatedForBuyer(buyer.Email, buyer.FullName, order.OrderNo, order.Total),
+                cancellationToken);
+        }
+
+        if (artisanId != buyerId)
+        {
+            var artisan = participants.FirstOrDefault(user => user.Id == artisanId);
+            if (artisan is not null && !string.IsNullOrWhiteSpace(artisan.Email))
+            {
+                await _emailPublisher.PublishAsync(
+                    EmailTemplates.OrderCreatedForArtisan(artisan.Email, artisan.FullName, order.OrderNo),
+                    cancellationToken);
+            }
+        }
     }
 
     private Guid GetCurrentUserId()
@@ -144,11 +200,16 @@ public sealed class RequestOrderCancellationCommandHandler : IRequestHandler<Req
 {
     private readonly IMarketplaceDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IEmailMessagePublisher _emailPublisher;
 
-    public RequestOrderCancellationCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    public RequestOrderCancellationCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IEmailMessagePublisher emailPublisher)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _emailPublisher = emailPublisher;
     }
 
     public async Task<bool> Handle(RequestOrderCancellationCommand request, CancellationToken cancellationToken)
@@ -197,6 +258,21 @@ public sealed class RequestOrderCancellationCommandHandler : IRequestHandler<Req
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (order.ArtisanId != userId)
+        {
+            var artisan = await _dbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(user => user.Id == order.ArtisanId, cancellationToken);
+
+            if (artisan is not null && !string.IsNullOrWhiteSpace(artisan.Email))
+            {
+                await _emailPublisher.PublishAsync(
+                    EmailTemplates.OrderCancellationRequested(artisan.Email, artisan.FullName, order.OrderNo, order.CancellationReason!),
+                    cancellationToken);
+            }
+        }
+
         return true;
     }
 }
@@ -249,11 +325,19 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
 {
     private readonly IMarketplaceDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IEmailMessagePublisher _emailPublisher;
+    private readonly INotificationService _notificationService;
 
-    public UpdateOrderStatusCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    public UpdateOrderStatusCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IEmailMessagePublisher emailPublisher,
+        INotificationService notificationService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _emailPublisher = emailPublisher;
+        _notificationService = notificationService;
     }
 
     public async Task<bool> Handle(UpdateOrderStatusCommand request, CancellationToken cancellationToken)
@@ -276,21 +360,38 @@ public sealed class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrde
         order.Status = request.Status;
         order.UpdatedAt = DateTime.UtcNow;
 
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
         if (order.BuyerId != userId)
         {
-            var buyerNotification = new Notification
+            // OBSERVER kalibi: durum degisikligi olayini tum gozlemcilere yayinla.
+            // Gozlemcilerden biri bildirimi DB'ye yazar, digeri SignalR ile aliciya anlik iletir.
+            var notifier = new OrderNotifier();
+            notifier.Subscribe(new DatabaseNotificationObserver(_dbContext));
+            notifier.Subscribe(new RealtimeNotificationObserver(_notificationService));
+
+            await notifier.NotifyStatusChangedAsync(
+                new OrderStatusChangedEvent
+                {
+                    OrderId = order.Id,
+                    OrderNo = order.OrderNo,
+                    NewStatus = order.Status,
+                    RecipientUserId = order.BuyerId
+                },
+                cancellationToken);
+
+            var buyer = await _dbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(user => user.Id == order.BuyerId, cancellationToken);
+
+            if (buyer is not null && !string.IsNullOrWhiteSpace(buyer.Email))
             {
-                UserId = order.BuyerId,
-                Type = NotificationType.Order,
-                Title = "Siparis durumu guncellendi",
-                Description = $"{order.OrderNo} numarali siparisinizin durumu guncellendi.",
-                TargetModule = "orders",
-                TargetId = order.Id
-            };
-            await _dbContext.Notifications.AddAsync(buyerNotification, cancellationToken);
+                await _emailPublisher.PublishAsync(
+                    EmailTemplates.OrderStatusUpdated(buyer.Email, buyer.FullName, order.OrderNo, order.Status),
+                    cancellationToken);
+            }
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
 }

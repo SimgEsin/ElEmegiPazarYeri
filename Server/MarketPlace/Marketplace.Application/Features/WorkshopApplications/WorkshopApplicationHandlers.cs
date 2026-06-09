@@ -1,5 +1,6 @@
 using MediatR;
 using Marketplace.Application.Common.Interfaces;
+using Marketplace.Application.Common.Models;
 using Marketplace.Application.Interfaces;
 using Marketplace.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,20 +11,26 @@ public sealed class CreateWorkshopApplicationCommandHandler : IRequestHandler<Cr
 {
     private readonly IMarketplaceDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IEmailMessagePublisher _emailPublisher;
 
-    public CreateWorkshopApplicationCommandHandler(IMarketplaceDbContext dbContext, ICurrentUserService currentUserService)
+    public CreateWorkshopApplicationCommandHandler(
+        IMarketplaceDbContext dbContext,
+        ICurrentUserService currentUserService,
+        IEmailMessagePublisher emailPublisher)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _emailPublisher = emailPublisher;
     }
 
     public async Task<Guid> Handle(CreateWorkshopApplicationCommand request, CancellationToken cancellationToken)
     {
         var dto = request.WorkshopApplication;
+        var userId = GetCurrentUserId();
 
         var workshopApplication = new WorkshopApplication
         {
-            UserId = GetCurrentUserId(),
+            UserId = userId,
             ArtisanProfileId = dto.ArtisanProfileId,
             Message = dto.Message,
             Status = "Pending"
@@ -31,6 +38,17 @@ public sealed class CreateWorkshopApplicationCommandHandler : IRequestHandler<Cr
 
         await _dbContext.WorkshopApplications.AddAsync(workshopApplication, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var applicant = await _dbContext.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(user => user.Id == userId, cancellationToken);
+
+        if (applicant is not null && !string.IsNullOrWhiteSpace(applicant.Email))
+        {
+            await _emailPublisher.PublishAsync(
+                EmailTemplates.WorkshopApplicationReceived(applicant.Email, applicant.FullName),
+                cancellationToken);
+        }
 
         return workshopApplication.Id;
     }

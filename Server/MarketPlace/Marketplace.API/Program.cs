@@ -26,7 +26,7 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddDbContext<MarketplaceDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<IMarketplaceDbContext>(provider => provider.GetRequiredService<MarketplaceDbContext>());
-builder.Services.AddInfrastructureServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {

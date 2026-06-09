@@ -863,6 +863,13 @@ export default function ProfileClient() {
   const avatarFileInputRef = useRef<HTMLInputElement>(null)
   const [activeSection, setActiveSection] = useState<ProfileSection>("info")
 
+  // Header'daki bildirim zilinden gelen "/profile#bildirimler" linki Bildirim Merkezi'ni acar.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#bildirimler") {
+      setActiveSection("notifications")
+    }
+  }, [])
+
   const [profile, setProfile] = useState<ProfileView>(emptyProfile)
   const [draftProfile, setDraftProfile] = useState<ProfileView>(emptyProfile)
   const [isEditingProfile, setIsEditingProfile] = useState(false)

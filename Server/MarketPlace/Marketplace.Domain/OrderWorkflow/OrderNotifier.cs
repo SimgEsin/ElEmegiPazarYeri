@@ -3,10 +3,19 @@ using Marketplace.Domain.Enums;
 namespace Marketplace.Domain.OrderWorkflow;
 
 // OBSERVER (davranissal) tasarim kalibi.
+// Siparis durumu degistiginde gozlemcilere iletilen olay verisi.
+public sealed class OrderStatusChangedEvent
+{
+    public Guid OrderId { get; init; }
+    public string OrderNo { get; init; } = string.Empty;
+    public OrderStatus NewStatus { get; init; }
+    public Guid RecipientUserId { get; init; }
+}
+
 // Gozlemci arayuzu: siparis durumu degistiginde haberdar edilecek taraflarin sozlesmesi.
 public interface IOrderObserver
 {
-    void OnOrderStatusChanged(string orderNo, OrderStatus newStatus);
+    Task OnOrderStatusChangedAsync(OrderStatusChangedEvent statusChange, CancellationToken cancellationToken);
 }
 
 // SUBJECT (gozlenen). Gozlemcileri tutar ve bir olay olunca hepsine otomatik haber verir.
@@ -19,29 +28,11 @@ public sealed class OrderNotifier
 
     public void Unsubscribe(IOrderObserver observer) => _observers.Remove(observer);
 
-    public void NotifyStatusChanged(string orderNo, OrderStatus newStatus)
+    public async Task NotifyStatusChangedAsync(OrderStatusChangedEvent statusChange, CancellationToken cancellationToken)
     {
         foreach (var observer in _observers)
         {
-            observer.OnOrderStatusChanged(orderNo, newStatus);
+            await observer.OnOrderStatusChangedAsync(statusChange, cancellationToken);
         }
     }
-}
-
-// Somut gozlemci 1: musteriye e-posta bildirimi hazirlar.
-public sealed class CustomerEmailObserver : IOrderObserver
-{
-    public string LastMessage { get; private set; } = string.Empty;
-
-    public void OnOrderStatusChanged(string orderNo, OrderStatus newStatus)
-        => LastMessage = $"[E-posta] {orderNo} numarali siparisinizin durumu guncellendi: {newStatus}";
-}
-
-// Somut gozlemci 2: zanaatkar paneline bildirim dusurur.
-public sealed class ArtisanPanelObserver : IOrderObserver
-{
-    public string LastMessage { get; private set; } = string.Empty;
-
-    public void OnOrderStatusChanged(string orderNo, OrderStatus newStatus)
-        => LastMessage = $"[Panel] {orderNo} numarali siparis guncellendi: {newStatus}";
 }
