@@ -34,16 +34,22 @@ export function useRealtimeNotifications(
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(resolveHubUrl(), { accessTokenFactory: () => token })
       .withAutomaticReconnect()
+      .configureLogging(signalR.LogLevel.Warning)
       .build()
 
     connection.on("ReceiveNotification", (message: string, payload: unknown) => {
       callbackRef.current(message, payload)
     })
 
-    connection.start().catch(() => undefined)
+    // start()'in donus promise'ini saklariz; temizlikte ONCE start bitene kadar bekleyip
+    // sonra stop() cagiririz. Boylece React Strict Mode'un (dev) ikili mount'unda olusan
+    // "connection was stopped during negotiation" hatasi engellenir.
+    const startPromise = connection.start().catch(() => undefined)
 
     return () => {
-      void connection.stop()
+      void startPromise.finally(() => {
+        connection.stop().catch(() => undefined)
+      })
     }
   }, [])
 }

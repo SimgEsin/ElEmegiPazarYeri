@@ -33,6 +33,7 @@ export default function SohbetDemoPage() {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(resolveHubUrl(), { accessTokenFactory: () => token })
       .withAutomaticReconnect()
+      .configureLogging(signalR.LogLevel.Warning)
       .build()
 
     connection.on("ReceiveMessage", (user: string, message: string) => {
@@ -46,7 +47,7 @@ export default function SohbetDemoPage() {
       setStatus("Bağlantı kapandı")
     })
 
-    connection
+    const startPromise = connection
       .start()
       .then(() => {
         setConnected(true)
@@ -57,7 +58,9 @@ export default function SohbetDemoPage() {
     connectionRef.current = connection
 
     return () => {
-      void connection.stop()
+      void startPromise.finally(() => {
+        connection.stop().catch(() => undefined)
+      })
     }
   }, [])
 
