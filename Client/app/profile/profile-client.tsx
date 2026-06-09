@@ -57,6 +57,7 @@ import {
   sendMessage,
   type Agreement,
 } from "@/lib/api/conversations"
+import { useRealtimeNotifications } from "@/lib/use-realtime-notifications"
 import type { Address, ConversationListItem, Notification, Order, OrderStatus } from "@/lib/api/types"
 
 type ProfileSection =
@@ -1031,6 +1032,26 @@ export default function ProfileClient() {
       loadThreadMessages(selectedThreadId)
     }
   }, [selectedThreadId, threadMessages, loadThreadMessages])
+
+  // SignalR: yeni bildirim/mesaj push'u gelince; bildirimleri, sohbet listesini ve
+  // acik olan sohbeti ANINDA tazele (sayfa yenilemeye gerek kalmadan).
+  useRealtimeNotifications(() => {
+    void (async () => {
+      try {
+        const [latestNotifications, latestConversations] = await Promise.all([
+          getNotifications(),
+          getMyConversations(),
+        ])
+        setNotifications(latestNotifications)
+        setConversations(latestConversations)
+        if (selectedThreadId) {
+          await loadThreadMessages(selectedThreadId)
+        }
+      } catch {
+        // sessizce gec
+      }
+    })()
+  })
 
   function handleStartEditingProfile() {
     setDraftProfile(profile)

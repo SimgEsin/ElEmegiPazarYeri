@@ -38,6 +38,7 @@ import {
 } from "@/lib/api/conversations"
 import { createProductImage, deleteProductImage, getProductImages } from "@/lib/api/images"
 import { getNotifications, markNotificationRead } from "@/lib/api/notifications"
+import { useRealtimeNotifications } from "@/lib/use-realtime-notifications"
 import { getArtisanOrders, updateOrderStatus } from "@/lib/api/orders"
 import {
   createProduct,
@@ -439,6 +440,26 @@ export default function ArtisanPanelClient() {
       window.clearInterval(timer)
     }
   }, [loadConversations, loadAgreements, loadThreadMessages, selectedAgreementId, selectedThreadId])
+
+  // SignalR: yeni mesaj/teklif/bildirim push'u gelince 6sn polling'i beklemeden ANINDA tazele.
+  useRealtimeNotifications(() => {
+    void (async () => {
+      try {
+        const latestNotifications = await getNotifications()
+        setNotifications(latestNotifications)
+        await loadConversations()
+        await loadAgreements()
+        if (selectedAgreementId) {
+          await loadThreadMessages(selectedAgreementId)
+        }
+        if (selectedThreadId) {
+          await loadThreadMessages(selectedThreadId)
+        }
+      } catch {
+        // sessizce gec
+      }
+    })()
+  })
 
   async function syncProductImages(productId: string, product: ArtisanProduct) {
     const existing = await getProductImages(productId)
